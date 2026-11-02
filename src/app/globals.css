@@ -1,0 +1,200 @@
+@import "tailwindcss";
+
+/* `dark:` utilities follow the resolved theme on <html data-theme>, not only the OS setting. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+/* Admin sidebar collapsed (desktop); set on <html data-sidebar> by the preferences script. */
+@custom-variant sidebar-collapsed (&:where([data-sidebar="collapsed"] *));
+
+/*
+ * Design tokens. Change brand colors here; components use the Tailwind
+ * utilities mapped below (bg-brand, text-muted, border-line, ...).
+ * The theme script in the root layout sets data-theme="light" | "dark" on <html>
+ * before first paint (saved choice, else the system preference).
+ */
+:root {
+  --brand: #136045;
+  --brand-hover: #0e4a35;
+  --brand-soft: #e5f1eb;
+  --brand-contrast: #ffffff;
+
+  --background: #f5f7f6;
+  --surface: #ffffff;
+  --surface-muted: #f1f4f3;
+  --foreground: #121a17;
+  --muted: #5a6964;
+  --line: #e1e7e4;
+
+  --sidebar: #0d4a36;
+  --sidebar-foreground: #cfe3d9;
+  --sidebar-active: #1b6a4e;
+  --sidebar-active-foreground: #ffffff;
+
+  --success: #17784a;
+  --success-soft: #e3f3ea;
+  --warning: #93560a;
+  --warning-soft: #fcf1df;
+  --danger: #b4233c;
+  --danger-soft: #fce9ec;
+  --info: #1f5fa8;
+  --info-soft: #e8f0fb;
+
+  /* Charts */
+  --chart-current: #136045;
+  --chart-previous: #a3264f;
+  --chart-grid: #e6ebe9;
+  --status-received: #c9cfcc;
+  --status-preparing: #b4e0c8;
+  --status-on_the_way: #f2b4c4;
+  --status-delivered: #136045;
+  --status-cancelled: #a3264f;
+
+  /* Storefront call-to-action (red to deep red) */
+  --cta-from: #c4314a;
+  --cta-to: #5e1424;
+  /* Home hero slider card: deep brand greens with light text in both themes */
+  --hero-from: #17714f;
+  --hero-to: #0a3426;
+  --hero-text: #ffffff;
+  --hero-muted: rgb(255 255 255 / 0.8);
+  --hero-accent: #8ff0c4;
+  --hero-tile: rgb(255 255 255 / 0.1);
+
+  --focus: #2563eb;
+  --radius: 0.75rem;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --brand: #34d399;
+  --brand-hover: #6ee7b7;
+  --brand-soft: #12302a;
+  --brand-contrast: #04261b;
+
+  --background: #0a1311;
+  --surface: #0f1b18;
+  --surface-muted: #15241f;
+  --foreground: #e6efeb;
+  --muted: #93a69f;
+  --line: #20322c;
+
+  --sidebar: #0c1714;
+  --sidebar-foreground: #a9bdb5;
+  --sidebar-active: #143a2e;
+  --sidebar-active-foreground: #ecfdf5;
+
+  --success: #4ade80;
+  --success-soft: #11301f;
+  --warning: #fbbf24;
+  --warning-soft: #33270b;
+  --danger: #fb7185;
+  --danger-soft: #3a1520;
+  --info: #60a5fa;
+  --info-soft: #10233d;
+
+  --chart-current: #34d399;
+  --chart-previous: #f19bb3;
+  --chart-grid: #1f302a;
+  --status-received: #5b6b66;
+  --status-preparing: #8fd9b6;
+  --status-on_the_way: #f19bb3;
+  --status-delivered: #34d399;
+  --status-cancelled: #e2557a;
+
+  --cta-from: #d4475f;
+  --cta-to: #6e1a2d;
+  --hero-from: #145a41;
+  --hero-to: #061f17;
+  --hero-text: #f2fbf7;
+  --hero-muted: rgb(242 251 247 / 0.78);
+  --hero-accent: #6ee7b7;
+  --hero-tile: rgb(255 255 255 / 0.08);
+
+  --focus: #60a5fa;
+  color-scheme: dark;
+}
+
+/* Storefront content width (header, footer, Home sections, store pages): 1380px. */
+@theme {
+  --container-site: 86.25rem;
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-contrast: var(--brand-contrast);
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-active-foreground: var(--sidebar-active-foreground);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-focus: var(--focus);
+  --color-cta-from: var(--cta-from);
+  --color-cta-to: var(--cta-to);
+  --color-hero-from: var(--hero-from);
+  --color-hero-to: var(--hero-to);
+  --color-hero-text: var(--hero-text);
+  --color-hero-muted: var(--hero-muted);
+  --color-hero-accent: var(--hero-accent);
+  --color-hero-tile: var(--hero-tile);
+  --radius-ui: var(--radius);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, "Noto Sans Bengali", sans-serif;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* Consistent, clearly visible keyboard focus everywhere. */
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* Hide horizontal scrollbar on nav strips while keeping them scrollable. */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Invoice pages: print only the invoice document (navigation, banners and controls are hidden). */
+/* Cart panel slides in from the right (src/components/cart/cart-drawer.tsx). */
+@keyframes cart-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  [data-invoice],
+  [data-invoice] * {
+    visibility: visible;
+  }
+  [data-invoice] {
+    position: absolute;
+    inset: 0 0 auto 0;
+    border: 0;
+  }
+}
