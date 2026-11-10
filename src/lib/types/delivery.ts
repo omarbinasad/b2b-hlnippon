@@ -14,6 +14,10 @@ export interface DeliveryRoute {
   /** LEGACY: shipping charges now come from shipping zones (src/lib/shipping). Orders at or above this subtotal shipped free. */
   freeShippingThreshold?: Money;
   active: boolean;
+  /** Holidays and other days without delivery, YYYY-MM-DD. */
+  excludedDates?: string[];
+  /** Delivery on these dates even if not a regular day. */
+  extraDates?: string[];
 }
 
 export type ReminderType = "reorder" | "order_cutoff" | "payment_due";

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DemoViewSwitcher } from "@/components/layout/demo-view-switcher";
 import { CartLink, NotificationLink } from "@/components/layout/header-icons";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { PortalShell } from "@/components/layout/portal-shell";
 import { Notice } from "@/components/ui/feedback";
 import { accountNav } from "@/config/site";
@@ -37,6 +38,7 @@ export default async function AccountLayout({ children }: LayoutProps<"/account"
     >
       {children}
       <DemoViewSwitcher />
+      <MobileBottomNav />
     </PortalShell>
   );
 }

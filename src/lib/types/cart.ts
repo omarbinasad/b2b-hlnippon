@@ -1,6 +1,8 @@
 import type { ID, Money } from "./common";
 import type { ProductImage, StockStatus } from "./catalog";
 import type { PaymentMethodId } from "./payment";
+import type { CartCoupon } from "./coupon";
+import type { CheckoutShippingOption } from "./shipping";
 import type { Order } from "./order";
 
 /** What the browser may send: product, option and quantity. Prices are always resolved on the server. */
@@ -63,6 +65,8 @@ export interface Cart {
   lines: CartLine[];
   /** Sum of priced lines, before shipping and tax. */
   itemsSubtotal: Money;
+  /** The coupon the customer entered, re-checked on every read. */
+  coupon?: CartCoupon;
   /** True when every line can be ordered. */
   valid: boolean;
   updatedAt?: string;
@@ -71,6 +75,8 @@ export interface Cart {
 /** Customer checkout. Addresses come from the customer's own address book. */
 export interface CheckoutInput {
   shippingAddressId: ID;
+  /** The customer's choice; absent = the cheapest delivery method. */
+  shippingMethodId?: ID;
   /** Defaults to the customer's default billing address, else the delivery address. */
   billingAddressId?: ID;
   paymentMethod: PaymentMethodId;
@@ -82,4 +88,4 @@ export interface CheckoutInput {
 }
 
 /** What checkout would create, without saving it. */
-export type CheckoutPreview = Pick<Order, "items" | "shipping" | "taxes" | "totals" | "paymentStatus">;
+export type CheckoutPreview = Pick<Order, "items" | "shipping" | "taxes" | "totals" | "paymentStatus" | "coupon"> & { shippingOptions: CheckoutShippingOption[]; selectedMethodId?: ID };

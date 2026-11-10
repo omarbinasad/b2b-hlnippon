@@ -17,24 +17,23 @@ export interface StoreAddress {
   prefecture: string;
   postalCode: string;
   /** ISO 3166-1 alpha-2; Japan in this version. */
-  country: "JP";
+  country: string;
 }
 
+/** Read-only view of the company settings for shipping, tax and invoices. Edited through `repositories.company`. */
 export interface StoreSettings {
   storeName: string;
   email?: string;
   phone?: string;
   address: StoreAddress;
-  /** Fixed for this store version; changing them needs a backend migration. */
-  currency: "JPY";
-  timeZone: "Asia/Tokyo";
+  currency: string;
+  timeZone: string;
   /** Default units for new products and how weights are displayed. */
   weightUnit: "kg" | "g";
   dimensionUnit: DimensionUnit;
   updatedAt: ISODateString;
 }
 
-export type StoreSettingsInput = Pick<StoreSettings, "storeName" | "email" | "phone" | "address" | "weightUnit" | "dimensionUnit">;
 
 /** One place a zone covers. Matching is by specificity: postcode > city > prefecture. */
 export type ZoneLocation =
@@ -73,9 +72,43 @@ export type ShippingMethod =
   /** Free delivery when the items subtotal is at least `minSubtotal`. */
   | (MethodBase & { type: "free_shipping"; minSubtotal: Money })
   /** Customer collects from the store; offered next to delivery, never chosen automatically. */
-  | (MethodBase & { type: "local_pickup"; cost: Money; instructions?: string });
+  | (MethodBase & { type: "local_pickup"; cost: Money; instructions?: string; locationId?: ID });
 
 export type ShippingMethodType = ShippingMethod["type"];
+
+export interface PickupLocation {
+  id: ID;
+  name: string;
+  address: string;
+  hours?: string;
+  instructions?: string;
+  fee: Money;
+  enabled: boolean;
+}
+
+export type PickupLocationInput = Omit<PickupLocation, "id">;
+
+/** A shipping class with its fee and how many products use it. */
+export interface ShippingClassUsage {
+  id: ID;
+  name: string;
+  description?: string;
+  surcharge?: Money;
+  surchargePer?: "order" | "unit";
+  products: number;
+}
+
+export type ShippingClassInput = Omit<ShippingClassUsage, "id" | "products">;
+
+/** A delivery option the customer can choose at checkout. */
+export interface CheckoutShippingOption {
+  methodId: ID;
+  name: string;
+  type: ShippingMethodType;
+  cost: Money;
+  /** Pickup location details, when there are any. */
+  detail?: string;
+}
 
 export interface ShippingZone extends LegacyRef {
   id: ID;

@@ -49,7 +49,7 @@ export function ImageSlot({
           fill
           sizes={sizes}
           priority={priority}
-          unoptimized={original}
+          unoptimized={original || image.src.startsWith("/media/")}
           loading={priority ? undefined : "lazy"}
           className={cx(fit === "cover" ? "object-cover" : "object-contain", imageClassName)}
         />

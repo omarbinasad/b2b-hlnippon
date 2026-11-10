@@ -80,7 +80,7 @@ export interface ResolvedPrice {
   variationId?: ID;
   /** Regular price. */
   basePrice: Money;
-  /** Active sale price, if any (used only when no rule applies). */
+  /** Active sale price, if any (the engine uses the lower of this and the rule price). */
   salePrice?: Money;
   unitPrice: Money;
   priceSource: "rule" | "sale" | "regular";

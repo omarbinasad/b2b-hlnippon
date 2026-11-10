@@ -1,7 +1,7 @@
-import type { IconName as NavIconName } from "@/config/site";
 
 /** Small inline stroke icon set (24×24), so no icon package is needed. */
 const paths: Record<string, React.ReactNode> = {
+  file: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /><path d="M9 13h6M9 17h6" /></>,
   dashboard: (
     <>
       <rect x="3" y="3" width="7.5" height="7.5" rx="1.5" />
@@ -33,6 +33,14 @@ const paths: Record<string, React.ReactNode> = {
     <>
       <path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9Z" />
       <circle cx="8" cy="8" r="1.5" />
+    </>
+  ),
+  truckFast: (
+    <>
+      <path d="M6 6h9v10h-3M15 9h3.5L22 12.5V16h-2M6 16h1" />
+      <circle cx="9.5" cy="16.5" r="2" />
+      <circle cx="17.5" cy="16.5" r="2" />
+      <path d="M2 9h6M1 12h5" />
     </>
   ),
   truck: (
@@ -91,8 +99,35 @@ const paths: Record<string, React.ReactNode> = {
     </>
   ),
   store: <path d="M3 9 4.5 4h15L21 9M3 9v11h18V9M3 9h18M9 20v-6h6v6" />,
+  heart: <path d="M12 20.5s-8-4.6-8-10.6A4.4 4.4 0 0 1 12 7.3a4.4 4.4 0 0 1 8 2.6c0 6-8 10.6-8 10.6z" />,
   folder: <path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6Z" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  phone: <path d="M5 3h3.5l1.8 4.5-2.3 1.7a12 12 0 0 0 5.8 5.8l1.7-2.3L19 14.5V18a3 3 0 0 1-3 3C9.4 21 3 14.6 3 8V5a2 2 0 0 1 2-2Z" />,
+  mail: (
+    <>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3.5 7 8.5 6 8.5-6" />
+    </>
+  ),
+  mapPin: (
+    <>
+      <path d="M12 22s7.5-6.6 7.5-12.5a7.5 7.5 0 0 0-15 0C4.5 15.4 12 22 12 22Z" />
+      <circle cx="12" cy="9.5" r="2.5" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3.5 2" />
+    </>
+  ),
+  target: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="5" />
+      <circle cx="12" cy="12" r="1" />
+    </>
+  ),
   pencil: <path d="M4 20h4L19 9l-4-4L4 16v4ZM14 6l4 4" />,
   copy: (
     <>
@@ -186,7 +221,20 @@ const paths: Record<string, React.ReactNode> = {
 };
 
 export type IconName =
-  | NavIconName
+  | "file"
+  | "dashboard"
+  | "box"
+  | "clipboard"
+  | "user"
+  | "users"
+  | "tag"
+  | "truck"
+  | "truckFast"
+  | "heart"
+  | "bell"
+  | "settings"
+  | "folder"
+  | "fileUser"
   | "sun"
   | "moon"
   | "calendar"
@@ -203,6 +251,11 @@ export type IconName =
   | "store"
   | "folder"
   | "plus"
+  | "phone"
+  | "mail"
+  | "mapPin"
+  | "clock"
+  | "target"
   | "pencil"
   | "copy"
   | "archive"

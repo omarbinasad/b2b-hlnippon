@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { cx } from "@/lib/cx";
 
 const densities = {
-  normal: "min-w-[36rem] [&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:py-2.5",
+  normal: "min-w-[36rem] [&_td]:px-3 [&_td]:py-3 [&_th]:px-3 [&_th]:py-2.5 2xl:[&_td]:px-4 2xl:[&_th]:px-4",
   /** For tables inside dashboard panels: no minimum width, tighter cells. */
   compact: "[&_td]:px-2.5 [&_td]:py-2.5 [&_th]:px-2.5 [&_th]:py-2",
 };

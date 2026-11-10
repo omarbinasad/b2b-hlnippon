@@ -1,11 +1,12 @@
 "use client";
 
+import { addressLabels } from "@/lib/locations";
 import { useState, useTransition } from "react";
-import { lookupPostcodeAction, saveAddressAction } from "@/app/admin/customers/actions";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select } from "@/components/ui/field";
-import { JP_PREFECTURES } from "@/lib/locations";
+import { Field, Input } from "@/components/ui/field";
+import { RegionField } from "@/components/ui/region-field";
 import type { Address, AddressInput, FieldErrors, PostcodeLookup } from "@/lib/types";
+import { siteConfig } from "@/config/site";
 import { isPostcode } from "@/lib/customers/contact";
 
 const blank: AddressInput = {
@@ -13,7 +14,7 @@ const blank: AddressInput = {
   label: "",
   recipientName: "",
   companyName: "",
-  country: "JP",
+  country: "",
   prefecture: "",
   city: "",
   area: "",
@@ -24,20 +25,23 @@ const blank: AddressInput = {
   isDefault: false,
 };
 
-/** Japanese address: 7-digit postcode → prefecture → city (市区町村) → optional town (町域) → street and building. */
+/** Address form, following the store country's labels and rules. */
 export function AddressForm({
-  customerId,
+  save,
+  lookup: lookupPostcode,
   address,
   defaults,
   onDone,
 }: {
-  customerId: string;
+  /** Who may save is decided by the action passed in (admin or the customer's own). */
+  save: (input: AddressInput) => Promise<{ ok: true } | { ok: false; errors: FieldErrors; message: string }>;
+  lookup: (postcode: string) => Promise<PostcodeLookup>;
   address?: Address;
   /** Prefill for new addresses (e.g. business name and contact). */
   defaults?: Partial<AddressInput>;
   onDone: () => void;
 }) {
-  const [values, setValues] = useState<AddressInput>(() => (address ? { ...blank, ...address } : { ...blank, ...defaults }));
+  const [values, setValues] = useState<AddressInput>(() => (address ? { ...blank, ...address } : { ...blank, country: siteConfig.country, ...defaults }));
   const [errors, setErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState("");
   const [lookup, setLookup] = useState<PostcodeLookup | null>(null);
@@ -72,7 +76,7 @@ export function AddressForm({
       onSubmit={(e) => {
         e.preventDefault();
         startSaving(async () => {
-          const result = await saveAddressAction(customerId, values);
+          const result = await save(values);
           if (result.ok) onDone();
           else {
             setErrors(result.errors);
@@ -106,7 +110,7 @@ export function AddressForm({
       <div className="space-y-2 rounded-ui border border-line p-3">
         <div className="flex items-end gap-2">
           <div className="w-36">
-            <Field id={`${p}-postalCode`} label="Postcode" required error={errors.postalCode}>
+            <Field id={`${p}-postalCode`} label={addressLabels().postcode} required error={errors.postalCode}>
               <Input
                 id={`${p}-postalCode`}
                 inputMode="numeric"
@@ -124,7 +128,7 @@ export function AddressForm({
           <Button
             variant="secondary"
             disabled={!isPostcode(values.postalCode) || looking}
-            onClick={() => startLookup(async () => setLookup(await lookupPostcodeAction(values.postalCode)))}
+            onClick={() => startLookup(async () => setLookup(await lookupPostcode(values.postalCode)))}
           >
             {looking ? "Looking up…" : "Look up"}
           </Button>
@@ -164,17 +168,13 @@ export function AddressForm({
       <div className="grid gap-3 sm:grid-cols-3">
         {text("area", "Town / 町域 (optional)")}
         {text("city", "City", { required: true })}
-        <Field id={`${p}-prefecture`} label="Prefecture" required error={errors.prefecture}>
-          <Select
+        <Field id={`${p}-prefecture`} label={addressLabels().region} required error={errors.prefecture}>
+          <RegionField
             id={`${p}-prefecture`}
             value={values.prefecture}
             onChange={(e) => set("prefecture", e.target.value)}
             aria-invalid={Boolean(errors.prefecture)}
-            aria-describedby={errors.prefecture ? `${p}-prefecture-error` : undefined}
-          >
-            <option value="">Choose…</option>
-            {JP_PREFECTURES.map((d) => <option key={d} value={d}>{d}</option>)}
-          </Select>
+            aria-describedby={errors.prefecture ? `${p}-prefecture-error` : undefined} />
         </Field>
       </div>
 

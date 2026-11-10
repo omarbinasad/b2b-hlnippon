@@ -407,11 +407,17 @@ const seedProducts: Product[] = [
   }),
 ];
 
+/** Fictional sample brands with fictional logos, so the homepage section has something to show. */
+const sampleBrand = (id: string, slug: string, name: string, displayOrder: number): Brand => ({ id, slug, name, displayOrder, showOnHome: true, logo: { src: `/images/brands/${slug}.svg`, alt: `${name} logo`, width: 240, height: 120 } });
+
 const seedBrands: Brand[] = [
-  { id: "brand-sample-foods", slug: "sample-foods", name: "Sample Foods" },
-  { id: "brand-demo-mills", slug: "demo-mills", name: "Demo Mills" },
-  { id: "brand-example-imports", slug: "example-imports", name: "Example Imports" },
-  { id: "brand-house", slug: "house-brand", name: "House brand" },
+  sampleBrand("brand-sample-foods", "sample-foods", "Sample Foods", 10),
+  sampleBrand("brand-demo-mills", "demo-mills", "Demo Mills", 20),
+  sampleBrand("brand-example-imports", "example-imports", "Example Imports", 30),
+  sampleBrand("brand-house", "house-brand", "House brand", 40),
+  sampleBrand("brand-demo-dairy", "demo-dairy", "Demo Dairy", 50),
+  sampleBrand("brand-sample-spice", "sample-spice", "Sample Spice Co", 60),
+  sampleBrand("brand-example-grains", "example-grains", "Example Grains", 70),
 ];
 
 const seedTags: Tag[] = [
@@ -476,6 +482,17 @@ store.__mockCatalogV6 ??= {
 export const mockProducts = store.__mockCatalogV6.products;
 export const mockCategories = store.__mockCatalogV6.categories;
 export const mockBrands = store.__mockCatalogV6.brands;
+
+// A server already running when logos arrived keeps its catalog and gains the sample logos once.
+const logoStore = globalThis as typeof globalThis & { __mockBrandLogosSeeded?: boolean };
+if (!logoStore.__mockBrandLogosSeeded) {
+  logoStore.__mockBrandLogosSeeded = true;
+  for (const seed of seedBrands) {
+    const existing = mockBrands.find((b) => b.id === seed.id);
+    if (!existing) mockBrands.push({ ...seed });
+    else if (existing.logo === undefined) Object.assign(existing, { logo: seed.logo, showOnHome: seed.showOnHome, displayOrder: seed.displayOrder });
+  }
+}
 export const mockTags = store.__mockCatalogV6.tags;
 export const mockAttributes = store.__mockCatalogV6.attributes;
 export const mockShippingClasses = store.__mockCatalogV6.shippingClasses;

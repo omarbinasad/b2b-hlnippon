@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { AllowedLink } from "@/components/admin/capabilities-context";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { assignCategoryProductsAction } from "@/app/admin/categories/actions";
@@ -44,7 +44,7 @@ export function CategoryProducts({ categoryId, categoryName, products, total }: 
           {products.map((p) => (
             <li key={p.id} className="flex items-center gap-3 px-3 py-2">
               <div className="min-w-0 flex-1">
-                <Link href={`/admin/products/${p.id}/edit`} className="block truncate text-sm font-medium hover:underline">{p.name}</Link>
+                <AllowedLink href={`/admin/products/${p.id}/edit`} className="block truncate text-sm font-medium hover:underline">{p.name}</AllowedLink>
                 <p className="text-xs text-muted">{p.sku} · {humanize(p.type)}</p>
               </div>
               {p.status !== "published" && <Badge tone={p.status === "draft" ? "warning" : "neutral"}>{humanize(p.status)}</Badge>}

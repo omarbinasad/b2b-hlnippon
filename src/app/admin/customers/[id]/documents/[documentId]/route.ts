@@ -1,10 +1,12 @@
+import { getCapabilities } from "@/lib/auth/session";
 import { repositories } from "@/lib/data";
 
 /*
- * Staff view of an uploaded identity document. MOCK: /admin has no login yet, so this is not protected;
- * the backend must check the staff session and a customers.documents permission, and log each view.
+ * Staff view of an uploaded identity document. MOCK: the role comes from a cookie, so this is not protection;
+ * the backend must check the staff session and customer_approval.view, and log each view.
  */
 export async function GET(_req: Request, ctx: RouteContext<"/admin/customers/[id]/documents/[documentId]">) {
+  if (!(await getCapabilities()).includes("customer_approval.view")) return new Response("Your role can't open identity documents.", { status: 403, headers: { "Cache-Control": "private, no-store" } });
   const { id, documentId } = await ctx.params;
   const found = await repositories.customers.getDocument(id, documentId);
   if (!found) return new Response("Not found", { status: 404, headers: { "Cache-Control": "private, no-store" } });

@@ -1,3 +1,4 @@
+import { Can } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ActionNotice, DemoEditingNotice, MockPermissionNote } from "@/components/admin/demo-notice";
@@ -50,9 +51,9 @@ export default async function ShippingZonesPage({ searchParams }: PageProps<"/ad
         title="Shipping"
         description="Zones by prefecture, city or postcode, and the delivery rates for each."
         actions={
-          <ButtonLink href="/admin/shipping/new">
+          <Can cap="shipping.manage"><ButtonLink href="/admin/shipping/new">
             <Icon name="plus" className="size-4" /> New zone
-          </ButtonLink>
+          </ButtonLink></Can>
         }
       />
       <ShippingNav current="zones" />

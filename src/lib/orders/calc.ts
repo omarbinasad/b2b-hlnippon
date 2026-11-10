@@ -15,8 +15,8 @@ import type { TaxClass, TaxLine, Weight } from "@/lib/types";
 
 // --- Money ------------------------------------------------------------------------
 
-const DIGITS = STORE_CURRENCY.minorDigits;
-const FACTOR = 10 ** DIGITS;
+const digits = () => STORE_CURRENCY.minorDigits;
+const factor = () => 10 ** digits();
 
 /**
  * Amount → integer minor units (1 per yen for JPY, 100 per unit for 2-decimal currencies). Uses the
@@ -24,13 +24,13 @@ const FACTOR = 10 ** DIGITS;
  */
 export function toMinor(amount: number): number {
   if (!Number.isFinite(amount)) throw new Error(`Invalid amount: ${amount}`);
-  const [whole, fraction = "0"] = Math.abs(amount).toFixed(DIGITS).split(".");
-  const minor = Number(whole) * FACTOR + Number(fraction);
+  const [whole, fraction = "0"] = Math.abs(amount).toFixed(digits()).split(".");
+  const minor = Number(whole) * factor() + Number(fraction);
   return amount < 0 ? -minor : minor;
 }
 
 /** integer minor units → amount. */
-export const fromMinor = (minor: number): number => minor / FACTOR;
+export const fromMinor = (minor: number): number => minor / factor();
 
 /** Exact half-up rounding of numerator/denominator (both non-negative BigInts) to an integer. */
 function divRoundHalfUp(numerator: bigint, denominator: bigint): bigint {
@@ -285,11 +285,11 @@ export const isValidAmount = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v) && v >= 0 && Math.abs(fromMinor(toMinor(v)) - v) < 1e-9;
 
 /** Wording of the amount precision rule for messages: "no decimals" for JPY. */
-export const AMOUNT_RULE = DIGITS === 0 ? "no decimals" : `up to ${DIGITS} decimals`;
+export const amountRule = () => (digits() === 0 ? "no decimals" : `up to ${digits()} decimals`);
 
 /** A percentage from 0 to 100 with up to 2 decimals (12.5 % is fine; independent of the currency). */
 export const isValidPercent = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100 && Math.abs(Math.round(v * 100) - v * 100) < 1e-6;
 
 /** `step` for amount inputs: "1" for JPY, "0.01" for 2-decimal currencies. */
-export const AMOUNT_STEP = DIGITS === 0 ? "1" : (1 / FACTOR).toFixed(DIGITS);
+export const amountStep = () => (digits() === 0 ? "1" : (1 / factor()).toFixed(digits()));

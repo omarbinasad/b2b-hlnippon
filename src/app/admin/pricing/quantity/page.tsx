@@ -1,3 +1,4 @@
+import { Can } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ActionNotice, DemoEditingNotice, MockPermissionNote } from "@/components/admin/demo-notice";
@@ -41,9 +42,9 @@ export default async function QuantityRulesPage({ searchParams }: PageProps<"/ad
         title="Pricing & quantity rules"
         description="B2B prices for customers and groups, bulk tiers, and per-line quantity limits."
         actions={
-          <ButtonLink href="/admin/pricing/quantity/new">
+          <Can cap="pricing.create"><ButtonLink href="/admin/pricing/quantity/new">
             <Icon name="plus" className="size-4" /> New quantity rule
-          </ButtonLink>
+          </ButtonLink></Can>
         }
       />
       <RulesNav current="quantity" />
@@ -125,7 +126,7 @@ export default async function QuantityRulesPage({ searchParams }: PageProps<"/ad
           To see the effective limit for one product or variation, use{" "}
           <Link href="/admin/pricing/test" className="font-medium text-brand hover:underline">Test rules</Link>.
         </p>
-        <MockPermissionNote permission="pricing.manage" />
+        <MockPermissionNote permission="pricing.edit" />
         <DemoEditingNotice />
       </div>
     </>

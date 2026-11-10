@@ -1,3 +1,4 @@
+import { Can } from "@/components/admin/capabilities-context";
 import Link from "next/link";
 import { duplicateProductAction, setProductStatusAction } from "@/app/admin/products/actions";
 import { ConfirmButton } from "@/components/ui/confirm-button";
@@ -17,15 +18,20 @@ export function ProductRowActions({ product, returnTo }: { product: AdminProduct
   );
   return (
     <div className="flex items-center justify-end gap-0.5">
-      <Link href={`/admin/products/${product.id}/edit`} className={iconButton} aria-label={`Edit ${product.name}`} title="Edit">
-        <Icon name="pencil" className="size-4" />
-      </Link>
-      <form action={duplicateProductAction}>
-        {hidden}
-        <button type="submit" className={iconButton} aria-label={`Duplicate ${product.name}`} title="Duplicate">
-          <Icon name="copy" className="size-4" />
-        </button>
-      </form>
+      <Can cap="products.edit">
+        <Link href={`/admin/products/${product.id}/edit`} className={iconButton} aria-label={`Edit ${product.name}`} title="Edit">
+          <Icon name="pencil" className="size-4" />
+        </Link>
+      </Can>
+      <Can cap="products.create">
+        <form action={duplicateProductAction}>
+          {hidden}
+          <button type="submit" className={iconButton} aria-label={`Duplicate ${product.name}`} title="Duplicate">
+            <Icon name="copy" className="size-4" />
+          </button>
+        </form>
+      </Can>
+      <Can cap={product.status === "archived" ? "products.edit" : "products.delete"}>
       <form action={setProductStatusAction}>
         {hidden}
         {product.status === "archived" ? (
@@ -55,6 +61,7 @@ export function ProductRowActions({ product, returnTo }: { product: AdminProduct
           </>
         )}
       </form>
+      </Can>
     </div>
   );
 }

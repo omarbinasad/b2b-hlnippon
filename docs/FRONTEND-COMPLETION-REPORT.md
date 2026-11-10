@@ -1,5 +1,11 @@
 # Frontend completion report
 
+**Final status (2026-11-05).** All 10 batches of the brief are finished as a demo. Results, what's untested and open issues are in `FRONTEND-MASTER-CHECKLIST.md`. Nothing real is implemented: `BACKEND-PENDING-FEATURES.md` lists what the backend must add. Start backend work at `BACKEND-INTEGRATION-GUIDE.md`. Older sections below are history, and their values (such as `isJpPhone`) may no longer match the code.
+
+> **Plan and status now live in `FRONTEND-MASTER-CHECKLIST.md`** (10-batch plan, brief of 2026-11-04). The checklist and batch plan below are the earlier 13-batch version, kept for its decisions and batch notes.
+
+**White label and CMS (2026-11-04).** New: company settings service and live `siteConfig`, country-aware address rules, branding CSS, setup wizard, media library, pages, posts, rich editor, menu builder, homepage builder, blog archive, public CMS pages, sitemap and robots. Added dependency: Tiptap editor packages, loaded only by admin editing screens. `updateStore` was replaced by `repositories.company`; `AMOUNT_STEP` and `AMOUNT_RULE` became functions.
+
 Status of the "Complete the B2B frontend and prepare the Laravel/Django backend handoff" work, including the
 extended scope of 2026-10-29 (WordPress-like CMS, coupons, invoice and transactional email management). Updated
 after every batch. Last update: 2026-10-29 (batch 2).
@@ -35,13 +41,13 @@ labelled screen, no behaviour · **Missing** = no screen · *(n)* = planned batc
 | --- | --- | --- |
 | Home: header, navigation, hero, categories, benefits, delivery info, footer | Demo (hard-coded copy) | Copy in `src/config/storefront.ts`; moves to the CMS service *(7)* |
 | Featured products section | Missing | Sample products carry `featured` (8 flagged) *(11)* |
-| CMS pages (About, policies…) and blog | Placeholder / Missing | About is static *(6)* |
+| CMS pages (About, policies…) and blog | Partial | About page designed (mission, vision, values; copy in `aboutContent`, draft wording); editing via CMS *(6)* |
 | Shop: search, filters, sorting, pagination, category pages | Demo | Server-side, `ListToolbar` |
 | Product page: options, min/max/step, wholesale price, login-to-view, add to cart | Demo | Image gallery *(11)* |
 | Cart, checkout | Demo | Idempotent, offline payment methods only. Coupon field *(4)* |
 | Business registration | Demo | Japanese address, optional residence card + business license uploads |
 | Login | Placeholder (mock viewer) | Forgot/reset password UI *(11)* |
-| Contact page | Placeholder | Form UI + contract *(11)* |
+| Contact page | **Demo** (2026-11-04) | Validated form with spam trap (stored in server memory, shown in the admin notification bell, no email, no inbox screen yet), contact details, OpenStreetMap embed from `siteConfig.contact.map` (sample point until the real address is set) |
 
 ### Customer portal
 
@@ -87,7 +93,7 @@ labelled screen, no behaviour · **Missing** = no screen · *(n)* = planned batc
 | Area | Status | Notes |
 | --- | --- | --- |
 | Pages: create, edit, preview, draft/publish/schedule, delete, SEO, slug | Missing | *(6)* |
-| Posts/blog: categories, tags, featured image, statuses | Missing | *(6)* |
+| Posts/blog: categories, tags, featured image, statuses | Partial (public only) | Home cards and article page `/blog/[slug]` read `repositories.posts` (3 sample articles). Admin editor, list page, categories, statuses *(6)* |
 | Rich content editor (sanitised HTML) | Missing | *(6)*, reuses `src/lib/html/sanitize.ts` |
 | Media library (upload, select) | Missing | *(6)* |
 | Header and footer menu builder (nested, drag-and-drop, custom links) | Missing | *(7)* |
@@ -122,6 +128,10 @@ labelled screen, no behaviour · **Missing** = no screen · *(n)* = planned batc
 | 11 | Storefront polish: featured products, about/owners, contact form UI, forgot/reset password UI, product gallery, SEO, loading/error states | |
 | 12 | `ApiDataAdapter` + handoff docs: API-CONTRACTS (+ OpenAPI), DATABASE-REQUIREMENTS, BUSINESS-RULES, FRONTEND-ROUTE-MAP, BACKEND-INTEGRATION-GUIDE, BACKEND-PENDING-FEATURES, CMS-AND-CONTENT-MANAGEMENT | |
 | 13 | Final QA: every route, forms, 375/390/430 px layouts and browser tests (needs a browser), build | |
+
+## Responsive audit (2026-11-04)
+
+Every route (62 route and viewer combinations) was loaded in Chrome at 375, 768, 1024 and 1366 px and checked for sideways page scrolling, elements running off-screen and text spilling from buttons. Fixed: Home blog cards on tablets, portal header on phones, dashboard panels on phones, store nav row on tablets (tablets now use the menu button), quick order table/card switch (now follows the sheet width), table density on laptops. After the fixes no page scrolls sideways at those widths. Wide admin tables still scroll inside their own box on phones and tablets (orders, customers, products, pricing); a card view for them is not built. Checked by automated measurements and a visual review of a sample of pages, on a headless browser, not on physical devices.
 
 ## Batch 2 — Order management completion (2026-10-29)
 

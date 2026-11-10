@@ -7,6 +7,7 @@ import { addToCartAction, quickOrderSheetAction } from "@/app/(store)/actions";
 import { StockBadge } from "@/components/ui/badge";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
+import { Select } from "@/components/ui/select";
 import { cx } from "@/lib/cx";
 import { formatMoney } from "@/lib/format";
 import type { QuickOrderAccess } from "@/lib/storefront/quick-order";
@@ -22,7 +23,7 @@ const MAX_QUANTITY = 10_000;
 const ACCESS_MESSAGE: Record<Exclude<QuickOrderAccess, "approved">, { text: string; locked: string }> = {
   guest: { text: "Sign in to view wholesale prices and place orders.", locked: "Login to view" },
   pending: { text: "Your business account is awaiting approval. Wholesale prices and ordering appear once it is approved.", locked: "Awaiting approval" },
-  admin: { text: "Admin preview: wholesale prices and ordering are shown to approved customers only (switch “Demo view” to Approved customer to preview).", locked: "Customers only" },
+  admin: { text: "Staff view: these are standard wholesale prices, before any customer's own prices. To order for a customer, use Create order in the admin.", locked: "" },
 };
 
 /** Why a quantity can't be added as entered (mirrors the cart's quantity checks; the server re-checks). */
@@ -40,7 +41,7 @@ function quantityProblem(line: QuickOrderLine, quantity: number): string | undef
  */
 export function QuickOrderSheet({ initial, categories, access }: { initial: QuickOrderPage; categories: { slug: string; name: string }[]; access: QuickOrderAccess }) {
   const canOrder = access === "approved";
-  const locked = access === "approved" ? "" : ACCESS_MESSAGE[access].locked;
+  const locked = access === "approved" || access === "admin" ? "" : ACCESS_MESSAGE[access].locked;
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("");
   const [data, setData] = useState(initial);
@@ -103,7 +104,7 @@ export function QuickOrderSheet({ initial, categories, access }: { initial: Quic
   const busy = loading || adding;
 
   return (
-    <section aria-label="Quick order" className="space-y-4 rounded-ui border border-line bg-surface p-4 sm:p-5">
+    <section aria-label="Quick order" className="@container space-y-4 rounded-ui border border-line bg-surface p-4 sm:p-5">
       <form
         role="search"
         className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_14rem_auto]"
@@ -125,23 +126,22 @@ export function QuickOrderSheet({ initial, categories, access }: { initial: Quic
             }}
             placeholder="Search by name or SKU…"
             autoComplete="off"
-            className="h-10 w-full rounded-ui border border-line bg-surface pr-3 pl-9 text-base placeholder:text-muted focus:border-brand sm:text-sm"
+            className="h-10 w-full rounded-ui border border-line bg-surface pr-3 pl-9 text-base placeholder:text-muted focus:border-brand focus:ring-3 focus:ring-brand/25 focus:outline-none sm:text-sm"
           />
         </div>
         <div>
           <label htmlFor="qos-category" className="sr-only">Category</label>
-          <select
+          <Select
             id="qos-category"
             value={category}
             onChange={(e) => {
               setCategory(e.target.value);
               load({ q, category: e.target.value, page: 1 });
             }}
-            className="h-10 w-full rounded-ui border border-line bg-surface px-3 text-base sm:text-sm"
           >
             <option value="">All categories</option>
             {categories.map((c) => <option key={c.slug} value={c.slug}>{c.name}</option>)}
-          </select>
+          </Select>
         </div>
         <Button type="submit" className="h-10" disabled={loading}>Search</Button>
       </form>
@@ -152,6 +152,7 @@ export function QuickOrderSheet({ initial, categories, access }: { initial: Quic
             <Icon name="lock" className="mt-0.5 size-4 shrink-0 text-brand" />
             {ACCESS_MESSAGE[access].text}
           </p>
+          {access === "admin" && <ButtonLink href="/admin/orders/new" size="sm">Create an order</ButtonLink>}
           {access === "guest" && (
             <div className="flex gap-2">
               <ButtonLink href="/login" size="sm">Log in</ButtonLink>
@@ -176,8 +177,8 @@ export function QuickOrderSheet({ initial, categories, access }: { initial: Quic
           <p className="rounded-ui border border-line px-4 py-10 text-center text-sm text-muted">No products match this search.</p>
         ) : (
           <>
-            {/* Phones: one card per line. */}
-            <ul className="divide-y divide-line rounded-ui border border-line md:hidden">
+            {/* Narrow sheet (phones, tablets, the portal's content column): one card per line. */}
+            <ul className="divide-y divide-line rounded-ui border border-line @3xl:hidden">
               {data.lines.map((line) => (
                 <li key={line.id} className="space-y-3 p-3">
                   <div className="flex gap-3">
@@ -196,8 +197,8 @@ export function QuickOrderSheet({ initial, categories, access }: { initial: Quic
               ))}
             </ul>
 
-            {/* Tablets and up: table. */}
-            <div className="hidden overflow-x-auto rounded-ui border border-line md:block">
+            {/* Wide sheet: table. */}
+            <div className="hidden overflow-x-auto rounded-ui border border-line @3xl:block">
               <table className="w-full text-sm">
                 <caption className="sr-only">Products to order</caption>
                 <thead className="bg-surface-muted text-left text-xs font-semibold tracking-wide text-muted uppercase">
@@ -318,9 +319,9 @@ function Stepper({ line, quantity, onQuantity, invalid }: { line: QuickOrderLine
   const inc = () => onQuantity(line, quantity === 0 ? line.minQuantity : Math.min(quantity + line.step, max));
   const dec = () => onQuantity(line, quantity - line.step < line.minQuantity ? 0 : quantity - line.step);
   const id = `qos-qty-${line.id}`;
-  const stepButton = "grid size-8 place-items-center rounded-ui bg-brand-soft text-brand hover:bg-brand hover:text-brand-contrast disabled:opacity-40 disabled:hover:bg-brand-soft disabled:hover:text-brand";
+  const stepButton = "grid size-7 place-items-center @3xl:size-8 rounded-ui bg-brand-soft text-brand hover:bg-brand hover:text-brand-contrast disabled:opacity-40 disabled:hover:bg-brand-soft disabled:hover:text-brand";
   return (
-    <div className={cx("inline-flex items-center gap-1 rounded-ui border p-1", invalid ? "border-danger" : "border-line")}>
+    <div className={cx("inline-flex items-center gap-0.5 rounded-ui border p-0.5 @3xl:gap-1 @3xl:p-1", invalid ? "border-danger" : "border-line")}>
       <button type="button" className={stepButton} onClick={dec} disabled={quantity === 0} aria-label={`Decrease quantity of ${line.name}`}>−</button>
       <label htmlFor={id} className="sr-only">Quantity of {line.name}{line.variationLabel ? ` (${line.variationLabel})` : ""}</label>
       <input
@@ -337,7 +338,7 @@ function Stepper({ line, quantity, onQuantity, invalid }: { line: QuickOrderLine
           onQuantity(line, Number.isFinite(n) && n > 0 ? Math.min(n, max) : 0);
         }}
         aria-invalid={invalid}
-        className="h-8 w-14 bg-transparent text-center text-base tabular-nums [appearance:textfield] focus:outline-none sm:text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        className="h-7 w-9 bg-transparent text-center @3xl:h-8 @3xl:w-14 text-base tabular-nums [appearance:textfield] focus:outline-none sm:text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
       <button type="button" className={stepButton} onClick={inc} disabled={quantity >= max} aria-label={`Increase quantity of ${line.name}`}>+</button>
     </div>

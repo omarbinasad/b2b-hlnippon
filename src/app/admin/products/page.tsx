@@ -1,3 +1,4 @@
+import { Can } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { siteConfig } from "@/config/site";
@@ -84,6 +85,7 @@ export default async function AdminProductsPage({ searchParams }: PageProps<"/ad
   });
   const missingPrices = (await repositories.products.adminList({ pricing: "missing", perPage: 1 })).total;
   const params = flatParams(sp);
+  const exportParams = Object.fromEntries(Object.entries(params).filter(([k]) => k !== "notice"));
   const sorting = { sort: state.sort, dir: state.dir, pathname: PATH, params };
   const returnTo = listHref(PATH, params, { notice: undefined });
 
@@ -94,12 +96,13 @@ export default async function AdminProductsPage({ searchParams }: PageProps<"/ad
         description="Catalog, variations, stock levels and quantity rules."
         actions={
           <>
+            <Can cap="products.export"><ButtonLink href={`/admin/products/export?${new URLSearchParams(exportParams)}` as "/admin/products"} prefetch={false} variant="secondary">Export CSV</ButtonLink></Can>
             <ButtonLink href="/admin/categories" variant="secondary">
               <Icon name="folder" className="size-4" /> Categories
             </ButtonLink>
-            <ButtonLink href="/admin/products/new">
+            <Can cap="products.create"><ButtonLink href="/admin/products/new">
               <Icon name="plus" className="size-4" /> Add product
-            </ButtonLink>
+            </ButtonLink></Can>
           </>
         }
       />
@@ -140,7 +143,7 @@ export default async function AdminProductsPage({ searchParams }: PageProps<"/ad
         <EmptyState
           title="No products match these filters"
           description="Try another search or filter. Archived products only appear when you filter by “Archived”."
-          action={<ButtonLink href="/admin/products/new">Add product</ButtonLink>}
+          action={<Can cap="products.create"><ButtonLink href="/admin/products/new">Add product</ButtonLink></Can>}
         />
       ) : (
         <>

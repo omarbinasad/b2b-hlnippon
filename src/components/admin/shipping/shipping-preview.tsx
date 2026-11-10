@@ -1,5 +1,6 @@
 "use client";
 
+import { addressLabels, regionNames } from "@/lib/locations";
 import { useState, useTransition } from "react";
 import { getOrderCustomerAction } from "@/app/admin/orders/actions";
 import { productOptionAction } from "@/app/admin/pricing/actions";
@@ -15,7 +16,7 @@ import { Table } from "@/components/ui/table";
 import { cx } from "@/lib/cx";
 import type { RuleProductOption, ShippingQuoteResult } from "@/lib/data/repositories";
 import { formatMoney } from "@/lib/format";
-import { JP_PREFECTURES } from "@/lib/locations";
+import { RegionField } from "@/components/ui/region-field";
 import { matchLevelLabel, methodTypeLabel } from "@/lib/shipping/engine";
 import type { OrderCustomerContext, ShippingClass } from "@/lib/types";
 
@@ -36,10 +37,14 @@ let seq = 0;
 const kg = (grams: number) => `${(grams / 1000).toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg`;
 const priceSourceText = { given: "entered", rule: "B2B rule", sale: "sale price", regular: "regular price" } as const;
 
-export function ShippingPreview({ classes, examples }: { classes: ShippingClass[]; examples: PreviewExample[] }) {
+export function ShippingPreview({ classes, examples, groups }: { classes: ShippingClass[]; examples: PreviewExample[]; groups: { id: string; name: string }[] }) {
   const [customer, setCustomer] = useState<OrderCustomerContext | null>(null);
-  const [address, setAddress] = useState({ prefecture: "Tokyo", city: "", postalCode: "" });
+  const [address, setAddress] = useState({ prefecture: regionNames()[0] ?? "", city: "", postalCode: "" });
   const [lines, setLines] = useState<CartLine[]>([]);
+  const [coupon, setCoupon] = useState("");
+  const [groupId, setGroupId] = useState("");
+  const [weightKg, setWeightKg] = useState("");
+  const [subtotalOverride, setSubtotal] = useState("");
   const [result, setResult] = useState<ShippingQuoteResult | null>(null);
   const [pending, startTransition] = useTransition();
   const className = (id?: string) => (id ? (classes.find((c) => c.id === id)?.name ?? id) : "—");
@@ -50,6 +55,10 @@ export function ShippingPreview({ classes, examples }: { classes: ShippingClass[
         await previewShippingAction({
           address: addr,
           customerId,
+          couponCode: coupon,
+          customerGroupId: groupId,
+          grams: weightKg === "" ? undefined : Number(weightKg) * 1000,
+          subtotal: subtotalOverride === "" ? undefined : Number(subtotalOverride),
           items: cart.map((l) => ({ productId: l.product.productId, variationId: l.variationId || undefined, quantity: Number(l.quantity) })),
         }),
       );
@@ -111,16 +120,14 @@ export function ShippingPreview({ classes, examples }: { classes: ShippingClass[
               <CustomerPicker id="pv-customer" onPick={(id) => startTransition(async () => setCustomer(await getOrderCustomerAction(id)))} />
             )}
             <p className="text-xs text-muted">Or enter an address by hand — a postcode is optional.</p>
-            <Field id="pv-prefecture" label="Prefecture">
-              <Select id="pv-prefecture" value={address.prefecture} onChange={(e) => setAddress({ ...address, prefecture: e.target.value })}>
-                {JP_PREFECTURES.map((d) => <option key={d} value={d}>{d}</option>)}
-              </Select>
+            <Field id="pv-prefecture" label={addressLabels().region}>
+              <RegionField id="pv-prefecture" value={address.prefecture} onChange={(e) => setAddress({ ...address, prefecture: e.target.value })} />
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field id="pv-city" label="City">
                 <Input id="pv-city" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} placeholder="e.g. Gazipur" />
               </Field>
-              <Field id="pv-postcode" label="Postcode">
+              <Field id="pv-postcode" label={addressLabels().postcode}>
                 <Input id="pv-postcode" inputMode="numeric" maxLength={4} value={address.postalCode} onChange={(e) => setAddress({ ...address, postalCode: e.target.value.replace(/\D/g, "") })} />
               </Field>
             </div>
@@ -166,7 +173,18 @@ export function ShippingPreview({ classes, examples }: { classes: ShippingClass[
                 })
               }
             />
-            <Button onClick={() => calculate()} disabled={pending || !lines.length}>{pending ? "Calculating…" : "Calculate shipping"}</Button>
+            <div className="grid gap-3 border-t border-line pt-3 sm:grid-cols-2">
+              <Field id="pv-group" label="Customer group">
+                <Select id="pv-group" value={groupId} onChange={(e) => setGroupId(e.target.value)}>
+                  <option value="">Any</option>
+                  {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </Select>
+              </Field>
+              <Field id="pv-coupon" label="Coupon code"><Input id="pv-coupon" value={coupon} onChange={(e) => setCoupon(e.target.value)} /></Field>
+              <Field id="pv-weight" label="Cart weight (kg)" hint="Optional: test without choosing products."><Input id="pv-weight" type="number" min={0} step="any" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} /></Field>
+              <Field id="pv-subtotal" label="Subtotal" hint="Optional."><Input id="pv-subtotal" type="number" min={0} value={subtotalOverride} onChange={(e) => setSubtotal(e.target.value)} /></Field>
+            </div>
+            <Button onClick={() => calculate()} disabled={pending || (!lines.length && weightKg === "" && subtotalOverride === "")}>{pending ? "Calculating…" : "Calculate shipping"}</Button>
           </div>
         </Card>
       </div>
@@ -194,6 +212,15 @@ export function ShippingPreview({ classes, examples }: { classes: ShippingClass[
                   </div>
                 ))}
               </dl>
+              {q.charge && (
+                <dl className="mt-4 space-y-1 rounded-ui border border-line p-3 text-sm [&>div]:flex [&>div]:justify-between [&>div]:gap-3" aria-label="How the charge was decided">
+                  <div><dt>Base charge</dt><dd className="tabular-nums">{formatMoney(q.charge.base)}</dd></div>
+                  {q.charge.surcharges.map((x) => <div key={x.label}><dt>{x.label}</dt><dd className="tabular-nums">+{formatMoney(x.amount)}</dd></div>)}
+                  <div><dt>Free shipping</dt><dd>{q.charge.free ? "Yes" : "No"}</dd></div>
+                  <div className="border-t border-line pt-1 font-semibold"><dt>Final charge</dt><dd className="tabular-nums">{formatMoney(q.charge.final)}</dd></div>
+                </dl>
+              )}
+              {q.rulesApplied.length > 0 && <p className="mt-3 text-sm"><span className="font-medium">Rules applied:</span> {q.rulesApplied.join(", ")}</p>}
               <p className="mt-4 text-sm">{q.explanation}</p>
               {result.skipped.length > 0 && <p className="mt-2 text-sm text-danger">Skipped: {result.skipped.join("; ")}</p>}
               <p className="mt-2 text-xs text-muted">Demo calculation with sample rates. The backend must calculate and enforce shipping at cart, checkout and order creation.</p>

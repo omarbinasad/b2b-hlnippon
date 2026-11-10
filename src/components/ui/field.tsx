@@ -1,11 +1,10 @@
-import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
 import { cx } from "@/lib/cx";
+import { controlClass } from "./control-class";
 
-/** Shared input style. Focus: brand border + soft brand ring (replaces the generic outline for form fields). */
-const control =
-  "block w-full rounded-ui border border-line bg-surface px-3 text-base text-foreground placeholder:text-muted " +
-  "transition-[border-color,box-shadow] focus:border-brand focus:ring-3 focus:ring-brand/25 focus:outline-none " +
-  "disabled:cursor-not-allowed disabled:bg-surface-muted aria-invalid:border-danger aria-invalid:focus:ring-danger/25 sm:text-sm";
+export { Select } from "./select";
+
+const control = `block w-full ${controlClass}`;
 
 interface FieldProps {
   id: string;
@@ -33,10 +32,6 @@ export function Field({ id, label, hint, error, required, children }: FieldProps
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cx(control, "h-10", className)} {...props} />;
-}
-
-export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={cx(control, "h-10 pr-8", className)} {...props} />;
 }
 
 export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {

@@ -4,6 +4,7 @@ import { CategoryForm } from "@/components/admin/categories/category-form";
 import { CategoryProducts } from "@/components/admin/categories/category-products";
 import { Pagination } from "@/components/ui/pagination";
 import { repositories } from "@/lib/data";
+import { allPages } from "@/lib/data/all-pages";
 import { param } from "@/lib/list-params";
 import type { Category } from "@/lib/types";
 
@@ -19,7 +20,7 @@ export default async function EditCategoryPage({ params, searchParams }: PagePro
   const [category, all, rows, products] = await Promise.all([
     repositories.categories.getById(id),
     repositories.categories.all(),
-    repositories.categories.list({ perPage: 48 }),
+    allPages((page, perPage) => repositories.categories.list({ page, perPage })),
     repositories.categories.listProducts(id, { page: Number(param(sp, "page")) || 1, perPage: 20 }),
   ]);
   if (!category) notFound();
@@ -30,7 +31,7 @@ export default async function EditCategoryPage({ params, searchParams }: PagePro
       <CategoryForm
         key={category.id}
         category={category}
-        parentOptions={rows.items.filter((c) => !blocked.includes(c.id)).map((c) => ({ id: c.id, path: c.path }))}
+        parentOptions={rows.filter((c) => !blocked.includes(c.id)).map((c) => ({ id: c.id, path: c.path }))}
         blockedParentIds={blocked}
       />
       <section aria-labelledby="category-products-title" className="mt-8 max-w-3xl rounded-ui border border-line bg-surface p-4 sm:p-5">

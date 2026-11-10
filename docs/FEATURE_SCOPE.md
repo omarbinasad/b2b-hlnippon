@@ -3,7 +3,7 @@
 Inventory of what the new system must cover to replace the current WordPress/WooCommerce site, and where each
 feature stands in this frontend. The API contract is in [backend-api.md](backend-api.md).
 
-Store defaults (mock, configurable in [`src/config/site.ts`](../src/config/site.ts)): Bangladesh, BDT (৳), `Asia/Dhaka`.
+Store defaults (mock, configurable in [`src/config/site.ts`](../src/config/site.ts)): Japan, JPY (¥), `Asia/Tokyo`.
 Product origin (e.g. Japan) is a product attribute, separate from the store location.
 
 ## Legend
@@ -51,9 +51,9 @@ Product origin (e.g. Japan) is a product attribute, separate from the store loca
 | Admin add / edit / duplicate / archive products | WC | Interactive demo — in-memory mock store (survives refresh and navigation, lost on restart) | Yes |
 | Category management (name, slug, parent, description, image, status) + product assignment | WC | Interactive demo — same in-memory store | Yes |
 | Brand / tag / attribute / shipping-class management screens | WC | — (selectors use seeded lists) | Yes |
-| Search, filter, pagination | WC | Interactive demo (shop: search from the header with a removable search chip, sort, left filter bar: customer-only price range (approved customers, server-side), availability, category tree (expandable subcategories), brands with counts; active-filter chips; admin: search incl. variation SKU, category tree, type, stock, status) | Yes |
+| Search, filter, pagination | WC | Interactive demo (shop: search from the header with a removable search chip, sort, left filter bar: customer-only price range slider (approved customers, server-side), availability, category tree (expandable subcategories), brands with counts; active-filter chips; admin: search incl. variation SKU, category tree, type, stock, status) | Yes |
 | Sorting | WC | Interactive demo (shop sort select; admin column sorting) | Yes |
-| Import existing products and images | New (migration) | Development import only: `npm run import:woocommerce` saves a sample (default 60 products, all 96 categories with hierarchy, brands, tags, local images) as a fixture behind the mock repositories; source prices kept as JPY metadata, products unpriced in BDT. Not the production migration — see docs/woocommerce-import-report.md | Yes |
+| Import existing products and images | New (migration) | Not used at runtime: the old import is archived in `scripts/legacy/`; the catalog is the standalone sample data | Yes (migration) |
 
 ## 2. B2B accounts and permissions
 
@@ -61,12 +61,12 @@ Product origin (e.g. Japan) is a product attribute, separate from the store loca
 | --- | --- | --- | --- |
 | Business registration form | Plugin? | Interactive demo: business, contact, address, optional Japan Residence Card (front/back) and business license copy upload (staff-only view); validated; creates a pending customer for admin approval. No password/login account; files kept in memory only | Yes (accounts, password, email) |
 | Optional document upload | New | — | Yes (file storage) |
-| Approval / rejection / suspension | Plugin? | Interactive demo: Registration requests page (`/admin/customers/requests`, sidebar + banner on Customers) lists waiting/declined applications with documents and Approve / Decline buttons; pending → approved/rejected, suspend/reactivate, reopen; reason required to reject/suspend; audit history. No emails | Yes |
+| Approval / rejection / suspension | Plugin? | Interactive demo: All Requests page (`/admin/customers/requests`, sidebar + banner on Customers) lists every application with its status (pending first, filter by status), documents and Approve / Decline buttons; pending → approved/rejected, suspend/reactivate, reopen; reason required to reject/suspend; audit history. No emails | Yes |
 | Price hiding for guests and unapproved accounts | Plugin? | UI hint only via mock viewer | Yes (**enforcement**) |
 | Admin quick-add customer (few fields, details later) | New | Interactive demo (name + phone or email + initial status; "details to complete" prompt) | Yes |
 | Admin customer list / detail / edit | WC | Interactive demo (filters, order count, total spend, linked orders, multiple addresses) | Yes |
 | Customer groups | Plugin? | Interactive demo: create, rename, add/remove members, member counts. Group IDs ready for future price/quantity rules; delete not built | Yes |
-| Roles: administrator, shop manager, customer | WC | Mock viewer has guest / customer / admin only | Yes |
+| Roles and capabilities: six templates, custom roles, per-action permissions | WC | Demo only, see ROLES-AND-CAPABILITIES.md. Not security | Yes |
 | Access and permission enforcement | — | **None**: portal and admin are open, with a preview banner | Yes |
 
 ## 3. Pricing and quantity rules
@@ -88,10 +88,10 @@ Product origin (e.g. Japan) is a product attribute, separate from the store loca
 
 | Feature | Source | Frontend status | Backend |
 | --- | --- | --- | --- |
-| Home | WC (theme) | Interactive demo from the design reference: hero, benefits, category cards, Quick order sheet (same component as `/account/quick-order`: name/SKU search, category filter, load more, qty steppers, add one / add selected to cart; prices and ordering only for approved customers, decided server-side), business section, delivery lookup by prefecture (sample route data), account steps, sample journal teasers (not links), contact strip. Images are labelled placeholders until files are added to /public/images (see src/config/storefront.ts) | Content/CMS later; articles; cart |
+| Home | WC (theme) | Interactive demo from the design reference: hero, benefits, category cards, Quick order sheet (same component as `/account/quick-order`: name/SKU search, category filter, load more, qty steppers, add one / add selected to cart; prices and ordering only for approved customers, decided server-side), business section, delivery lookup by prefecture (sample route data), account steps, journal cards with Read more, contact strip. Images are labelled placeholders until files are added to /public/images (see src/config/storefront.ts) | Content/CMS later; articles; cart |
 | Storefront header / footer | WC (theme) | Logo, product/SKU search → /shop, account, cart, "All categories" menu with the complete public category tree (multi-column on desktop, collapsible groups on mobile), nav, Apply for B2B account; footer links only to existing routes. Demo seed categories are hidden, so navigation shows the imported catalog | — |
 | Shop, product page | WC | Interactive demo | Yes |
-| About, contact | WC (pages) | Placeholder | Yes (contact form) |
+| About, contact | WC (pages) | About page with mission, vision, values and audiences (draft copy in `aboutContent`). Contact: interactive demo form (validated, spam trap, stored in server memory, shown in the admin notification bell, no email, no inbox screen yet), details, OpenStreetMap embed (sample point until the real address is set) | Yes (contact form email, inbox) |
 | Cart | WC | Interactive demo: header cart icon with product count on the store and customer portal opens a right-hand cart panel (lines, quantity +/−, remove, subtotal, View cart / Checkout; updates after every cart change); server-side cart per approved customer, re-priced on each view (rules, sale, tiers), min/max/step and stock checks; add from product page with option selector | Yes (persistence) |
 | Checkout: addresses, shipping estimate, tax display, payment method, summary | WC | Interactive demo: own addresses, delivery date, suggested shipping, fictional tax, offline payment methods, live totals; places an in-memory order (idempotent, never paid) | Yes |
 | Order confirmation | WC | — | Yes |
@@ -114,11 +114,11 @@ Product origin (e.g. Japan) is a product attribute, separate from the store loca
 | Balance after editing a paid order | New | Interactive demo: amount already paid kept on first edit; balance due / overpaid shown to admin and customer; nothing charged or refunded | Yes (payment/refund module) |
 | Stock from the order page | New | Interactive demo: live stock per line, warning for items now out of stock/unavailable, mark in/out of stock or set counted quantity (global catalog change; orders unchanged) | Yes |
 
-## 5. Bangladesh locations, shipping and delivery
+## 5. Japan locations, shipping and delivery
 
 | Feature | Source | Frontend status | Backend |
 | --- | --- | --- | --- |
-| Store address, country, currency, timezone | WC | Static config (BD / BDT / Asia-Dhaka defaults) | Yes (admin editing) |
+| Store address, country, currency, timezone | WC | Static config (JP / JPY / Asia-Tokyo) | Yes (admin editing) |
 | Store prefecture, city/city, postcode; selling locations; shipping destinations | WC + New (prefecture/city) | Interactive demo: store location in Settings; shipping destinations via zones (Bangladesh only) | Yes |
 | Customer address: prefecture, city, upazila/thana/locality, postcode, street, phone | New (WC has state/city only) | Interactive demo (admin address book, one default per type) | Yes |
 | Postcode lookup suggesting location fields, with manual correction | New | Interface demo with 12 labelled sample postcodes; suggestions applied only on click | Yes (verified dataset) |
@@ -142,7 +142,7 @@ Product origin (e.g. Japan) is a product attribute, separate from the store loca
 | Payment methods: enable/disable, display order, titles and instructions; bank transfer details | WC | Interactive demo (Admin → Payments), fictional bank values; checkout list method prepared | Yes |
 | Online payment provider connection, test/live mode | WC | Placeholder only: always "Not connected" and unavailable at checkout | Yes (integration) |
 | Gateway keys, processing, webhooks, refunds, marking orders paid | WC | — (secrets never in client code or browser storage; choosing a method never marks an order paid) | Yes |
-| Store contact details, address, weight/dimension units (currency BDT and Asia/Dhaka fixed) | WC | Interactive demo (Settings) | Yes |
+| Store contact details, address, weight/dimension units (currency JPY and Asia/Tokyo fixed) | WC | Interactive demo (Settings) | Yes |
 | Email templates | WC | — | Yes |
 | Staff settings | WC | — | Yes |
 
@@ -150,6 +150,7 @@ Product origin (e.g. Japan) is a product attribute, separate from the store loca
 
 | Feature | Source | Frontend status | Backend |
 | --- | --- | --- | --- |
+| Admin notifications | WC / New | Interactive demo: bell in the admin top bar with unread count and dropdown (new orders, registration requests, stock alerts, contact messages; mark read), sidebar badges on Orders (in progress, not yet delivered or cancelled) and All Requests (pending only); refreshed about once a minute | Yes (per-user read marks, push) |
 | Dashboard (order counts) | New | Read-only demo: revenue, orders, active customers, average order, new (first) orders and repeat orders for the chosen dates with comparison; Orders / New / Repeat boxes open the matching filtered order list | Yes |
 | Spending metrics | New | — | Yes |
 | Order history and details | WC | Read-only demo | Yes |
@@ -192,3 +193,7 @@ Product origin (e.g. Japan) is a product attribute, separate from the store loca
 | Search, filters, sorting and date ranges on every admin and portal listing (server-side, state in the URL) | New | Interactive demo | Yes (real queries) |
 | Collapsible admin sidebar (saved per browser) | New | Done (frontend-only) | No |
 | Mobile layout (430px) | New | Mobile-first throughout; admin dashboard verified at 430px in both themes | No |
+
+## Status moved
+
+From 2026-11-04 the live status of every feature is in `docs/FRONTEND-MASTER-CHECKLIST.md`. This file remains as the original inventory and may lag behind, notably for white-label settings and the CMS, which are now built.

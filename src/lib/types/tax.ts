@@ -23,7 +23,7 @@ export type TaxSettingsInput = Pick<TaxSettings, "enabled" | "pricesIncludeTax" 
 
 /** Where a rate applies. Matching priority: postcode > city > prefecture > country (fallback). */
 export type TaxLocation =
-  | { type: "country"; country: "JP" }
+  | { type: "country"; country: string }
   | { type: "prefecture"; prefecture: string }
   | { type: "city"; prefecture: string; city: string }
   | { type: "postcode"; postalCode: string };

@@ -29,8 +29,10 @@ import {
   mockTags,
   mockTaxClasses,
 } from "./mock/catalog";
-import { matches, paginate, sortBy, type SortKey } from "./mock-utils";
+import { validateBrand } from "@/lib/validation/brand";
+import { matches, paginate, sortBy, type SortKey, withinDates } from "./mock-utils";
 import type { CatalogSettingsRepository, CategoryRepository, ProductListQuery, ProductRepository, SaveResult } from "./repositories";
+import type { InventoryRow } from "@/lib/types";
 
 /*
  * DEMO STORE: edits mutate the in-memory mock arrays (on globalThis). They survive
@@ -378,7 +380,7 @@ function uniqueValue(base: string, taken: (v: string) => boolean, sep: string) {
 // --- Repositories ---------------------------------------------------------------
 
 /** Products the public catalog lists: published, visible for browsing (or search), not only in hidden categories. */
-function publicProducts(searching: boolean) {
+export function publicProducts(searching: boolean) {
   const hiddenCategoryIds = new Set(mockCategories.filter((c) => c.status === "hidden").map((c) => c.id));
   return mockProducts.filter(
     (p) =>
@@ -390,8 +392,17 @@ function publicProducts(searching: boolean) {
 
 export const mockProductRepository: ProductRepository = {
   async list({ page, perPage, ...q } = {}) {
-    return paginate(filterAndSort(publicProducts(Boolean(q.search?.trim())), q, false).map(toSummary), page, perPage);
+    const pool = publicProducts(Boolean(q.search?.trim())).filter((p) => !q.featured || p.featured);
+    return paginate(filterAndSort(pool, q, false).map(toSummary), page, perPage);
   },
+  async featuredBrands(max) {
+    const counts = new Map<string, number>();
+    for (const p of publicProducts(false)) for (const id of new Set(p.brandIds)) counts.set(id, (counts.get(id) ?? 0) + 1);
+    const chosen = mockBrands.filter((b) => b.showOnHome);
+    const ordered = [...chosen].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.name.localeCompare(b.name));
+    return clone(ordered.slice(0, max).map((b) => ({ ...b, productCount: counts.get(b.id) ?? 0 })));
+  },
+
   async listBrands(): Promise<BrandFacet[]> {
     const counts = new Map<string, number>();
     for (const p of publicProducts(false)) for (const id of new Set(p.brandIds)) counts.set(id, (counts.get(id) ?? 0) + 1);
@@ -427,6 +438,33 @@ export const mockProductRepository: ProductRepository = {
     const result = save(input, id);
     if (result.ok) recordStockChanges(snapshot, result.value, { source: "product_edit", byName, note: "Product edited" });
     return result;
+  },
+  async inventory({ search, stockStatus, page, perPage } = {}) {
+    const rows: InventoryRow[] = mockProducts
+      .filter((p) => p.status !== "archived")
+      .flatMap((p): InventoryRow[] => {
+        const base = { productId: p.id, productName: p.name, lowStockThreshold: p.lowStockThreshold };
+        if (p.type !== "variable") {
+          const info = lineStock(p);
+          return info ? [{ ...base, sku: p.sku, stock: info.stock, mode: info.mode, shared: false }] : [];
+        }
+        return p.variations.flatMap((v): InventoryRow[] => {
+          const info = lineStock(p, v.id);
+          return info ? [{ ...base, variationId: v.id, variationLabel: optionLabel(v), sku: v.sku, stock: info.stock, mode: info.mode, shared: info.shared, unavailable: info.unavailable }] : [];
+        });
+      })
+      .filter((r) => (!stockStatus || r.stock.status === stockStatus) && matches(search, r.productName, r.sku, r.variationLabel));
+    const key = (r: InventoryRow) => `${stockRank[r.stock.status]}-${r.productName.toLowerCase()}`;
+    return clone(paginate(sortBy(rows, key, "asc"), page, perPage));
+  },
+  async inventoryCounts() {
+    const { items } = await mockProductRepository.inventory({ perPage: 100000 });
+    return { total: items.length, low: items.filter((r) => r.stock.status === "low_stock").length, out: items.filter((r) => r.stock.status === "out_of_stock").length };
+  },
+  async allStockMovements({ search, from, to, page, perPage } = {}) {
+    const name = (id: string) => mockProducts.find((p) => p.id === id)?.name ?? id;
+    const rows = stockMovements.map((m) => ({ ...m, productName: name(m.productId) })).reverse().filter((m) => withinDates(m.at, { from, to }) && matches(search, m.productName, m.sku, m.byName, m.note));
+    return clone(paginate(rows, page, perPage));
   },
   async stockMovements(id, query = {}) {
     const rows = stockMovements.filter((m) => m.productId === id).reverse();
@@ -600,6 +638,47 @@ export const mockCatalogSettingsRepository: CatalogSettingsRepository = {
   },
   async storeDefaults() {
     return { lowStockThreshold: DEFAULT_LOW_STOCK_THRESHOLD };
+  },
+  async adminBrands({ search, showOnHome, sort = "name", dir = "asc", page, perPage } = {}) {
+    const rows = mockBrands
+      .filter((b) => matches(search, b.name, b.slug) && (showOnHome === undefined || Boolean(b.showOnHome) === showOnHome))
+      .map((b) => ({ ...b, productCount: mockProducts.filter((p) => p.brandIds.includes(b.id)).length }));
+    const key = sort === "products" ? (b: (typeof rows)[number]) => b.productCount : sort === "order" ? (b: (typeof rows)[number]) => b.displayOrder ?? 0 : (b: (typeof rows)[number]) => b.name.toLowerCase();
+    return clone(paginate(sortBy(rows, key, dir), page, perPage));
+  },
+  async saveBrand(id, input) {
+    const existing = id === null ? undefined : mockBrands.find((b) => b.id === id);
+    if (id !== null && !existing) return { ok: false, errors: {}, message: "That brand no longer exists." };
+    const errors = validateBrand(input, (name) => mockBrands.some((b) => b !== existing && b.name.toLowerCase() === name.toLowerCase()));
+    if (Object.keys(errors).length) return { ok: false, errors, message: "Some fields need attention." };
+    const name = input.name.trim();
+    if (existing) {
+      Object.assign(existing, { name, logo: input.logo, showOnHome: input.showOnHome, displayOrder: input.displayOrder });
+      return { ok: true, value: clone(existing) };
+    }
+    const slug = slugify(name) || "brand";
+    const brand: Brand = { id: uniqueValue(`brand-${slug}`, (v) => mockBrands.some((b) => b.id === v), "-"), slug: uniqueValue(slug, (v) => mockBrands.some((b) => b.slug === v), "-"), name, logo: input.logo, showOnHome: input.showOnHome, displayOrder: input.displayOrder };
+    mockBrands.push(brand);
+    return { ok: true, value: clone(brand) };
+  },
+  async brandUsage() {
+    return sortBy(mockBrands, (b) => b.name).map((b) => ({ name: b.name, count: mockProducts.filter((p) => p.brandIds.includes(b.id)).length }));
+  },
+  async renameBrand(from, raw) {
+    const name = raw.trim();
+    const brand = mockBrands.find((b) => b.name === from);
+    if (!brand) return { ok: false, errors: {} as Record<string, string>, message: "That brand no longer exists." };
+    if (name.length < 2 || name.length > 60) return { ok: false, errors: { name: "Use 2 to 60 characters." }, message: "Use 2 to 60 characters." };
+    if (mockBrands.some((b) => b !== brand && b.name.toLowerCase() === name.toLowerCase())) return { ok: false, errors: { name: "That name is already in use." }, message: "That name is already in use." };
+    brand.name = name;
+    return { ok: true, value: { ...brand } };
+  },
+  async deleteBrand(name) {
+    const i = mockBrands.findIndex((b) => b.name === name);
+    if (i < 0) return { ok: false, errors: {}, message: "That brand no longer exists." };
+    const [brand] = mockBrands.splice(i, 1);
+    for (const p of mockProducts) p.brandIds = p.brandIds.filter((id) => id !== brand.id);
+    return { ok: true, value: { name } };
   },
   async createBrand(rawName): Promise<SaveResult<Brand>> {
     const name = rawName.trim();

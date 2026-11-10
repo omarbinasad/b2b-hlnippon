@@ -78,7 +78,7 @@ export function validatePaymentMethod(id: PaymentMethodId, input: PaymentMethodI
       if (!b.accountNumber.trim()) errors["bank.accountNumber"] = "Required to enable bank transfer.";
     }
     if (b.accountNumber.trim() && !/^[0-9][0-9 -]{4,28}[0-9]$/.test(b.accountNumber.trim())) errors["bank.accountNumber"] = "Use 6–30 digits (spaces and dashes allowed).";
-    if (b.routingNumber?.trim() && !/^\d{9}$/.test(b.routingNumber.trim())) errors["bank.routingNumber"] = "Routing numbers have 9 digits.";
+    if (b.routingNumber?.trim() && !/^[0-9][0-9 -]{3,18}[0-9]$/.test(b.routingNumber.trim())) errors["bank.routingNumber"] = "Use 5–20 digits (spaces and dashes allowed).";
     for (const key of ["accountName", "bankName", "branchName"] as const) {
       if ((b[key] ?? "").length > PAYMENT_LIMITS.bankText) errors[`bank.${key}`] = "Too long.";
     }

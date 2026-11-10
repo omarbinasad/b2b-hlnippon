@@ -51,7 +51,7 @@ export default async function EditPriceRulePage({ params }: PageProps<"/admin/pr
           )}
           <PricePrecedence open />
           <p className="text-xs text-muted">Changing a rule never changes existing orders — each order line keeps the price and rule it was created with.</p>
-          <MockPermissionNote permission="pricing.manage" />
+          <MockPermissionNote permission="pricing.edit" />
           <DemoEditingNotice />
         </aside>
       </div>

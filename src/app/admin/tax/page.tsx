@@ -1,3 +1,4 @@
+import { Can, WriteGuard } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ActionNotice, DemoEditingNotice, MockPermissionNote } from "@/components/admin/demo-notice";
@@ -43,16 +44,16 @@ export default async function TaxPage({ searchParams }: PageProps<"/admin/tax">)
         title="Tax"
         description={`Tax settings, classes and rates. Settings last saved ${formatDateTime(settings.updatedAt)}.`}
         actions={
-          <ButtonLink href="/admin/tax/rates/new">
+          <Can cap="taxes.manage"><ButtonLink href="/admin/tax/rates/new">
             <Icon name="plus" className="size-4" /> New rate
-          </ButtonLink>
+          </ButtonLink></Can>
         }
       />
       <TaxNav current="settings" />
       <ActionNotice notice={notice} />
       <div className="mb-6 space-y-3">
         <Notice tone="warning" title="Fictional demo rates">
-          None of these rates is the current Japanese legal rate. They exist to demonstrate the calculation. The future backend performs the authoritative tax calculation;
+          None of these rates is a current legal rate. They exist to demonstrate the calculation. The future backend performs the authoritative tax calculation;
           tax filing, payment collection and refunds are not part of this module.
         </Notice>
         <TaxRules />
@@ -146,12 +147,12 @@ export default async function TaxPage({ searchParams }: PageProps<"/admin/tax">)
 
         <div className="min-w-0 space-y-4">
           <Card title="Settings">
-            <TaxSettingsForm settings={settings} classes={taxClasses} />
+            <WriteGuard cap="taxes.manage"><TaxSettingsForm settings={settings} classes={taxClasses} /></WriteGuard>
           </Card>
           <p className="text-sm">
             Check a cart and address in the <Link href="/admin/tax/preview" className="font-medium text-brand hover:underline">tax preview</Link>.
           </p>
-          <MockPermissionNote permission="tax.manage" />
+          <MockPermissionNote permission="taxes.manage" />
           <DemoEditingNotice />
         </div>
       </div>

@@ -4,6 +4,7 @@ import { ShippingPreview, type PreviewExample } from "@/components/admin/shippin
 import { Notice } from "@/components/ui/feedback";
 import { PageHeader } from "@/components/ui/page-header";
 import { repositories } from "@/lib/data";
+import { regionNames } from "@/lib/locations";
 
 export const metadata: Metadata = { title: "Shipping rate preview" };
 
@@ -16,7 +17,7 @@ export default async function ShippingPreviewPage() {
     repositories.pricing.productOption("p-011"),
   ]);
   const ex = (label: string, address: PreviewExample["address"], lines: (PreviewExample["lines"][number] | null)[]): PreviewExample | null =>
-    lines.every(Boolean) ? { label, address, lines: lines as PreviewExample["lines"] } : null;
+    lines.every(Boolean) && regionNames().includes(address.prefecture) ? { label, address, lines: lines as PreviewExample["lines"] } : null;
   const examples = [
     ex("Tokyo 23 wards: frozen chicken × 5 + basmati 20 kg × 2 (class surcharges)", { prefecture: "Tokyo", city: "Shibuya-ku", postalCode: "150-0043" }, [
       chicken && { product: chicken, quantity: 5 },
@@ -45,7 +46,7 @@ export default async function ShippingPreviewPage() {
         </Notice>
         <ShippingRules />
       </div>
-      <ShippingPreview classes={classes} examples={examples} />
+      <ShippingPreview groups={await repositories.customers.listGroups()} classes={classes} examples={examples} />
     </>
   );
 }

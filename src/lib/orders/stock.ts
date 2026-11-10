@@ -1,5 +1,5 @@
 /**
- * Current catalog stock for an order line (pure; tested in tests/order-stock.test.ts).
+ * Current catalog stock for an order line (pure; tested in tests/order-editing.test.ts).
  * Orders keep snapshots, so this is read live from the product and never stored on the order.
  */
 import type { ID, Product, StockInfo, StockMovementSource, StockStatus } from "@/lib/types";

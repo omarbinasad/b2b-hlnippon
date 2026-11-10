@@ -9,7 +9,7 @@ import { cx } from "@/lib/cx";
 import { formatMoney } from "@/lib/format";
 import { adjustedPrice, tierFor, tierLabel } from "@/lib/pricing/engine";
 import type { FieldErrors, PriceAdjustment, PriceTier } from "@/lib/types";
-import { AMOUNT_STEP } from "@/lib/orders/calc";
+import { amountStep } from "@/lib/orders/calc";
 
 /** Editable tier row (strings while typing). */
 export interface TierDraft {
@@ -90,7 +90,7 @@ export function TiersEditor({ tiers, onChange, errors, examplePrice }: { tiers: 
                 </div>
                 <div>
                   <label htmlFor={id("value")} className="block text-xs font-medium">{t.type === "percent_off" ? "Percent" : `Amount (${siteConfig.currencySymbol})`}</label>
-                  <Input id={id("value")} type="number" inputMode="decimal" min={0} step={t.type === "percent_off" ? "0.01" : AMOUNT_STEP} value={t.value} onChange={(ev) => update(t.key, { value: ev.target.value })} aria-invalid={Boolean(e("value"))} />
+                  <Input id={id("value")} type="number" inputMode="decimal" min={0} step={t.type === "percent_off" ? "0.01" : amountStep()} value={t.value} onChange={(ev) => update(t.key, { value: ev.target.value })} aria-invalid={Boolean(e("value"))} />
                 </div>
                 <Button
                   variant="ghost"
@@ -128,7 +128,7 @@ export function TiersEditor({ tiers, onChange, errors, examplePrice }: { tiers: 
         <div className="mt-2 flex flex-wrap gap-3">
           <label className="text-xs">
             Example base price ({siteConfig.currencySymbol})
-            <Input type="number" inputMode="decimal" min={0} step={AMOUNT_STEP} value={base} onChange={(e) => setBase(e.target.value)} className="mt-1 w-32" />
+            <Input type="number" inputMode="decimal" min={0} step={amountStep()} value={base} onChange={(e) => setBase(e.target.value)} className="mt-1 w-32" />
           </label>
           <label className="text-xs">
             Quantity

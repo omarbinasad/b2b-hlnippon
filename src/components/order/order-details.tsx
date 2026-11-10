@@ -42,7 +42,7 @@ export function OrderItemsTable({
       <tbody>
         {items.map((item, i) => (
           <tr key={item.id}>
-            <td className="min-w-48">
+            <td className="min-w-40">
               <p className="font-medium">{item.name}</p>
               {item.attributes && <p className="text-xs">{variationLabel(item.attributes)}</p>}
               <p className="text-xs text-muted">
@@ -94,7 +94,7 @@ export function OrderTotalsList({ order, vatNote }: { order: Order; vatNote?: st
   return (
     <dl className="space-y-1.5 text-sm [&_dd]:tabular-nums">
       <div className={row}><dt>Items</dt><dd>{formatMoney(t.itemsSubtotal)}</dd></div>
-      {lineDiscounts > 0 && <div className={row}><dt>{orderDiscount ? "Item discounts" : "Discounts"}</dt><dd>−{formatMoney(lineDiscounts)}</dd></div>}
+      {lineDiscounts > 0 && <div className={row}><dt>{order.coupon ? `Coupon ${order.coupon.code}` : orderDiscount ? "Item discounts" : "Discounts"}</dt><dd>−{formatMoney(lineDiscounts)}</dd></div>}
       {orderDiscount > 0 && (
         <div className={row}>
           <dt>Order discount{order.discount?.type === "percent" ? ` (${order.discount.value}%)` : ""}</dt>
@@ -105,7 +105,7 @@ export function OrderTotalsList({ order, vatNote }: { order: Order; vatNote?: st
       {order.taxes.map((tax) => (
         <div key={tax.rateId ?? tax.taxClass} className={row}>
           <dt className="text-muted">
-            {tax.rateName ?? `Consumption tax (${humanize(tax.taxClass)})`} {tax.rate}%{t.taxIncluded ? " included" : ""} on {formatMoney(tax.taxableAmount)}
+            {tax.rateName ?? `Tax (${humanize(tax.taxClass)})`} {tax.rate}%{t.taxIncluded ? " included" : ""} on {formatMoney(tax.taxableAmount)}
           </dt>
           <dd>{formatMoney(tax.taxAmount)}</dd>
         </div>

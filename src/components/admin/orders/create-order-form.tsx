@@ -1,5 +1,6 @@
 "use client";
 
+import { useCan } from "@/components/admin/capabilities-context";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createOrderAction, getOrderableProductAction, getOrderCustomerAction, quoteOrderLineAction, quoteOrderShippingAction, type OrderShippingSuggestion } from "@/app/admin/orders/actions";
 import { ProductSearch } from "@/components/admin/products/product-search";
@@ -10,7 +11,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icons";
 import { formatMoney, formatWeight, humanize } from "@/lib/format";
-import { isValidAmount, lineAmounts, AMOUNT_STEP } from "@/lib/orders/calc";
+import { isValidAmount, lineAmounts, amountStep } from "@/lib/orders/calc";
 import { previewTaxAction } from "@/app/admin/tax/actions";
 import type { TaxPreviewResult } from "@/lib/data/repositories";
 import { siteConfig } from "@/config/site";
@@ -37,6 +38,7 @@ const amount = (v: string) => (v.trim() === "" ? Number.NaN : Number(v));
 let lineSeq = 0;
 
 export function CreateOrderForm({ today }: { today: string }) {
+  const can = useCan();
   // "walk_in" = no customer account: catalog prices, email/phone optional, store pickup or delivery.
   const [mode, setMode] = useState<"account" | "walk_in">("account");
   const [walkIn, setWalkIn] = useState({ name: "", companyName: "", email: "", phone: "" });
@@ -423,7 +425,8 @@ export function CreateOrderForm({ today }: { today: string }) {
                               type="number"
                               inputMode="decimal"
                               min={0}
-                              step={AMOUNT_STEP}
+                              step={amountStep()}
+                              disabled={!can("order_prices.edit")}
                               value={l.unitPrice}
                               onChange={(e) => updateLine(l.key, { unitPrice: e.target.value, priceEdited: true })}
                               aria-invalid={Boolean(err(`${p}unitPrice`))}
@@ -436,7 +439,8 @@ export function CreateOrderForm({ today }: { today: string }) {
                               type="number"
                               inputMode="decimal"
                               min={0}
-                              step={AMOUNT_STEP}
+                              step={amountStep()}
+                              disabled={!can("order_discounts.edit")}
                               value={l.discount}
                               onChange={(e) => updateLine(l.key, { discount: e.target.value })}
                               aria-invalid={Boolean(err(`${p}discount`))}
@@ -603,7 +607,7 @@ export function CreateOrderForm({ today }: { today: string }) {
                         type="number"
                         inputMode="decimal"
                         min={0}
-                        step={AMOUNT_STEP}
+                        step={amountStep()}
                         value={shippingAmount}
                         onChange={(e) => setShippingAmount(e.target.value)}
                         aria-invalid={Boolean(err("shipping.amount"))}

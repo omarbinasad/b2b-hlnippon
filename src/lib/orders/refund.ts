@@ -13,7 +13,7 @@
  */
 // Relative imports (not the @/ alias) so the Node test runner can load this module.
 import { snapshotTax } from "./assemble.ts";
-import { AMOUNT_RULE, allocateMinor, fromMinor, isValidAmount, orderDiscountShares, toMinor } from "./calc.ts";
+import { amountRule, allocateMinor, fromMinor, isValidAmount, orderDiscountShares, toMinor } from "./calc.ts";
 import { STORE_CURRENCY } from "../../config/currency.ts";
 import { checkReason } from "../validation/order.ts";
 import type { FieldErrors, ID, Money, Order, PaymentStatus, Refund, RefundInput } from "@/lib/types";
@@ -128,7 +128,7 @@ export function checkRefund(order: RefundOrder, input: RefundInput): RefundCheck
   if (!s.collected) return { errors, amount: 0, message: "Record the payment first — only collected payments can be refunded." };
   checkReason(errors, input.reason);
   const money = (key: string, v: number, max?: number) => {
-    if (!isValidAmount(v)) errors[key] = `Enter a valid amount (0 or more, ${AMOUNT_RULE}).`;
+    if (!isValidAmount(v)) errors[key] = `Enter a valid amount (0 or more, ${amountRule()}).`;
     else if (max !== undefined && toMinor(v) > toMinor(max)) errors[key] = `At most ${money0(max)} can be refunded here.`;
   };
   let total = 0;

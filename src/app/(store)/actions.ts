@@ -7,17 +7,35 @@
 import type { Route } from "next";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getShoppingCustomerId } from "@/lib/auth/session";
+import { getPricingCustomerId, getShoppingCustomerId } from "@/lib/auth/session";
 import { repositories } from "@/lib/data";
-import type { Cart, CartLineInput, CheckoutInput, CheckoutPreview, FieldErrors, PaymentMethodId, QuickOrderPage } from "@/lib/types";
+import type { Cart, CartLineInput, CheckoutInput, CheckoutPreview, ContactTopic, FieldErrors, PaymentMethodId, QuickOrderPage } from "@/lib/types";
 
-/** Quick order sheet: search / category filter / next page (server-side). Prices only for approved customers. */
+/** Quick order sheet: search / category filter / next page (server-side). Prices for approved customers and staff. */
 export async function quickOrderSheetAction(input: { q?: unknown; category?: unknown; page?: unknown }): Promise<QuickOrderPage> {
-  return repositories.cart.quickOrder(await getShoppingCustomerId(), {
+  return repositories.cart.quickOrder(await getPricingCustomerId(), {
     search: typeof input.q === "string" ? input.q.slice(0, 100) : undefined,
     categorySlug: typeof input.category === "string" ? input.category.slice(0, 100) : undefined,
     page: typeof input.page === "number" && Number.isInteger(input.page) && input.page > 0 ? input.page : 1,
   });
+}
+
+export type ContactActionResult = { ok: true } | { ok: false; errors: FieldErrors; message: string };
+
+/** Contact form. DEMO: stored in server memory, no email is sent. The backend must add rate limiting and bot protection. */
+export async function sendContactMessageAction(raw: unknown): Promise<ContactActionResult> {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  // Spam trap: people never fill this hidden field. Looks like success, stores nothing.
+  if (str(o.website, 200)) return { ok: true };
+  const result = await repositories.contact.submit({
+    name: str(o.name, 300),
+    company: str(o.company, 300) || undefined,
+    email: str(o.email, 300),
+    phone: str(o.phone, 100) || undefined,
+    topic: str(o.topic, 30) as ContactTopic,
+    message: str(o.message, 3000),
+  });
+  return result.ok ? { ok: true } : { ok: false, errors: result.errors, message: result.message ?? "Some fields need attention." };
 }
 
 export type CartActionResult = { ok: true; cart: Cart; message?: string } | { ok: false; message: string };
@@ -58,6 +76,24 @@ export async function updateCartLineAction(lineId: unknown, quantity: unknown): 
   return { ok: true, cart: result.value };
 }
 
+export async function applyCouponAction(code: unknown): Promise<CartActionResult> {
+  const customerId = await getShoppingCustomerId();
+  if (!customerId) return { ok: false, message: "Log in with an approved account to use a coupon." };
+  const r = await repositories.cart.applyCoupon(customerId, typeof code === "string" ? code.slice(0, 40) : "");
+  if (!r.ok) return { ok: false, message: r.message ?? "That coupon can't be used." };
+  revalidatePath("/", "layout");
+  return { ok: true, cart: r.value };
+}
+
+export async function removeCouponAction(): Promise<CartActionResult> {
+  const customerId = await getShoppingCustomerId();
+  if (!customerId) return { ok: false, message: "Log in with an approved account." };
+  const r = await repositories.cart.removeCoupon(customerId);
+  if (!r.ok) return { ok: false, message: r.message ?? "That couldn't be removed." };
+  revalidatePath("/", "layout");
+  return { ok: true, cart: r.value };
+}
+
 export async function removeCartLineAction(lineId: unknown): Promise<CartActionResult> {
   const customerId = await getShoppingCustomerId();
   if (!customerId) return { ok: false, message: notShopper };
@@ -71,6 +107,7 @@ function checkoutInput(raw: unknown): CheckoutInput {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   return {
     shippingAddressId: str(o.shippingAddressId),
+    shippingMethodId: str(o.shippingMethodId) || undefined,
     billingAddressId: str(o.billingAddressId) || undefined,
     paymentMethod: str(o.paymentMethod, 40) as PaymentMethodId,
     requestedDeliveryDate: str(o.requestedDeliveryDate, 10) || undefined,

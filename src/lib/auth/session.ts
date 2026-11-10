@@ -1,6 +1,9 @@
 import "server-only";
 
 import { cookies } from "next/headers";
+import { ADMIN_ROLE_ID } from "@/lib/auth/capabilities";
+import { STANDARD_PRICING_ID } from "@/lib/pricing/standard";
+import { repositories } from "@/lib/data";
 import type { AccountStatus, ID } from "@/lib/types";
 
 /**
@@ -50,8 +53,11 @@ export async function getDemoView(): Promise<DemoView> {
 
 export async function getViewer(): Promise<Viewer> {
   switch (await getDemoView()) {
-    case "customer":
-      return { kind: "customer", customerId: DEMO_CUSTOMER_ID, status: "approved" };
+    case "customer": {
+      // The saved status, so changing this customer in the admin shows here too (no price means no price everywhere).
+      const customer = await repositories.customers.getById(DEMO_CUSTOMER_ID);
+      return { kind: "customer", customerId: DEMO_CUSTOMER_ID, status: customer?.status ?? "approved" };
+    }
     case "customer-pending":
       // Demo applicant awaiting approval: sees approval messages, never wholesale prices.
       return { kind: "customer", customerId: "cus-003", status: "pending" };
@@ -82,8 +88,37 @@ export function canSeeWholesalePrices(viewer: Viewer) {
  * must check these permissions on every mutation.
  */
 export async function getAdminActor(): Promise<{ id: ID; name: string; role: "admin"; permissions: string[] }> {
-  await cookies();
-  return { id: "admin-1", name: "Demo admin", role: "admin", permissions: ["orders.create", "orders.update", "orders.adjust", "orders.refund", "products.stock", "customers.manage", "customers.approve", "customer-groups.manage", "pricing.manage", "settings.manage", "shipping.manage", "tax.manage", "payments.manage"] };
+  return { id: "admin-1", name: "Demo admin", role: "admin", permissions: await getCapabilities() };
+}
+
+/** The admin performing an action, if their role has this capability; null means refuse. A screen rule only. */
+export async function actorWith(capability: string) {
+  const a = await getAdminActor();
+  return a.permissions.includes(capability) ? { id: a.id, name: a.name, role: a.role } : null;
+}
+
+/** Demo: which role the admin is being previewed as (`demo-role` cookie). */
+export const DEMO_ROLE_COOKIE = "demo-role";
+
+/** The previewed role, or Administrator. MOCK: the real role comes from the signed-in user. */
+export async function getAdminRole() {
+  const chosen = (await cookies()).get(DEMO_ROLE_COOKIE)?.value;
+  return (chosen ? await repositories.staff.role(chosen) : null) ?? (await repositories.staff.role(ADMIN_ROLE_ID));
+}
+
+/** What the current admin may do. A screen rule only: the backend must check every operation. */
+export async function getCapabilities(): Promise<string[]> {
+  return (await getAdminRole())?.capabilities ?? [];
+}
+
+/**
+ * Whose prices the store shows: an approved customer's own, the standard wholesale price for staff, or none (guests and
+ * applicants). Staff see prices but don't shop: they order for a customer in the admin.
+ */
+export async function getPricingCustomerId(): Promise<ID | null> {
+  const viewer = await getViewer();
+  if (viewer.kind === "admin") return STANDARD_PRICING_ID;
+  return viewer.kind === "customer" && viewer.status === "approved" ? viewer.customerId : null;
 }
 
 /**

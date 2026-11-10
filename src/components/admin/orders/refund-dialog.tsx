@@ -4,9 +4,9 @@ import { useState, useTransition } from "react";
 import { refundOrderAction } from "@/app/admin/orders/actions";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { Field, Input, Textarea } from "@/components/ui/field";
+import { Field, Input, Textarea, Select } from "@/components/ui/field";
 import { formatMoney } from "@/lib/format";
-import { AMOUNT_STEP, fromMinor, toMinor } from "@/lib/orders/calc";
+import { amountStep, fromMinor, toMinor } from "@/lib/orders/calc";
 import { suggestedLineAmount, type RefundSummary } from "@/lib/orders/refund";
 import type { FieldErrors, RefundKind } from "@/lib/types";
 
@@ -60,6 +60,7 @@ export function RefundButton({ orderId, summary, kind = "order" }: { orderId: st
         shipping: over ? 0 : n(shipping),
         other: n(other),
         reason,
+        method: "manual",
         restock: !over && restock && anyQuantity,
       });
       if (r.ok) close();
@@ -122,7 +123,7 @@ export function RefundButton({ orderId, summary, kind = "order" }: { orderId: st
                           </td>
                           <td className="py-2">
                             <label htmlFor={aId} className="sr-only">Refund amount for {l.name}</label>
-                            <Input id={aId} type="number" inputMode="numeric" min={0} step={AMOUNT_STEP} placeholder="0" disabled={l.maxAmount <= 0} value={lines[l.itemId].amount} onChange={(e) => setLines((s) => ({ ...s, [l.itemId]: { ...s[l.itemId], amount: e.target.value } }))} {...aria(`lines.${i}.amount`, aId)} />
+                            <Input id={aId} type="number" inputMode="numeric" min={0} step={amountStep()} placeholder="0" disabled={l.maxAmount <= 0} value={lines[l.itemId].amount} onChange={(e) => setLines((s) => ({ ...s, [l.itemId]: { ...s[l.itemId], amount: e.target.value } }))} {...aria(`lines.${i}.amount`, aId)} />
                             <p id={err(`lines.${i}.amount`) ? `${aId}-error` : undefined} className={err(`lines.${i}.amount`) ? "mt-1 text-xs text-danger" : "mt-1 text-xs text-muted"}>
                               {err(`lines.${i}.amount`) ?? `Max ${formatMoney(l.maxAmount)}`}
                             </p>
@@ -135,10 +136,10 @@ export function RefundButton({ orderId, summary, kind = "order" }: { orderId: st
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field id={`${p}-shipping`} label="Delivery charge" hint={`Max ${formatMoney(summary.shipping.maxAmount)}${summary.shipping.refunded > 0 ? ` (${formatMoney(summary.shipping.refunded)} already refunded)` : ""}.`} error={err("shipping")}>
-                  <Input id={`${p}-shipping`} type="number" inputMode="numeric" min={0} step={AMOUNT_STEP} placeholder="0" disabled={summary.shipping.maxAmount <= 0} value={shipping} onChange={(e) => setShipping(e.target.value)} {...aria("shipping", `${p}-shipping`)} />
+                  <Input id={`${p}-shipping`} type="number" inputMode="numeric" min={0} step={amountStep()} placeholder="0" disabled={summary.shipping.maxAmount <= 0} value={shipping} onChange={(e) => setShipping(e.target.value)} {...aria("shipping", `${p}-shipping`)} />
                 </Field>
                 <Field id={`${p}-other`} label="Other amount" hint="Not tied to an item, e.g. a goodwill credit." error={err("other")}>
-                  <Input id={`${p}-other`} type="number" inputMode="numeric" min={0} step={AMOUNT_STEP} placeholder="0" value={other} onChange={(e) => setOther(e.target.value)} {...aria("other", `${p}-other`)} />
+                  <Input id={`${p}-other`} type="number" inputMode="numeric" min={0} step={amountStep()} placeholder="0" value={other} onChange={(e) => setOther(e.target.value)} {...aria("other", `${p}-other`)} />
                 </Field>
               </div>
               <label className="flex items-start gap-2 text-sm">
@@ -152,9 +153,15 @@ export function RefundButton({ orderId, summary, kind = "order" }: { orderId: st
           )}
           {over && (
             <Field id={`${p}-other`} label="Amount" required hint={`Max ${formatMoney(summary.overpaid)}.`} error={err("other")}>
-              <Input id={`${p}-other`} type="number" inputMode="numeric" min={0} step={AMOUNT_STEP} value={other} onChange={(e) => setOther(e.target.value)} {...aria("other", `${p}-other`)} />
+              <Input id={`${p}-other`} type="number" inputMode="numeric" min={0} step={amountStep()} value={other} onChange={(e) => setOther(e.target.value)} {...aria("other", `${p}-other`)} />
             </Field>
           )}
+          <Field id={`${p}-method`} label="Refund method" hint="Manual: you pay the money back yourself and record it here. Gateway refunds need a connected payment provider.">
+            <Select id={`${p}-method`} value="manual" onChange={() => {}}>
+              <option value="manual">Manual refund</option>
+              <option value="gateway" disabled>Through payment gateway (none connected)</option>
+            </Select>
+          </Field>
           <Field id={`${p}-reason`} label="Reason" required hint="Required. Shown in the order's refund history." error={err("reason")}>
             <Textarea id={`${p}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} placeholder={over ? "e.g. Order reduced after weighing" : "e.g. 2 cases returned damaged"} {...aria("reason", `${p}-reason`)} />
           </Field>

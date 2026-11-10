@@ -15,7 +15,7 @@ export interface BankAccountDetails {
   bankName: string;
   accountNumber: string;
   branchName?: string;
-  /** Optional bank/branch code shown to the customer (e.g. a 4-digit bank and 3-digit branch code in Japan). */
+  /** Optional bank/branch code shown to the customer (its format depends on the country). */
   routingNumber?: string;
 }
 

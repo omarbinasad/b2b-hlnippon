@@ -1,4 +1,7 @@
+import { Can } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
+import { RoleDashboard } from "@/components/admin/staff/role-dashboard";
+import { getAdminRole } from "@/lib/auth/session";
 import { RevenueChart, StatusDonut } from "@/components/admin/dashboard/charts";
 import { DashboardFilters } from "@/components/admin/dashboard/filters";
 import {
@@ -21,6 +24,9 @@ import { formatDateRange, formatMoney, formatNumber } from "@/lib/format";
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function AdminDashboardPage({ searchParams }: PageProps<"/admin">) {
+  const [notifications, role] = await Promise.all([repositories.adminNotifications.feed({ limit: 0 }), getAdminRole()]);
+  // Roles without reports get a dashboard of what they can do.
+  if (role && !role.capabilities.includes("reports.view")) return <RoleDashboard role={role} openOrders={notifications.openOrders} pendingRequests={notifications.pendingRegistrations} />;
   const today = todayIn(siteConfig.timeZone);
   const params = parseDashboardParams(await searchParams, today);
   const data = await repositories.analytics.getDashboard({ range: params.range, compare: params.compare });
@@ -75,7 +81,7 @@ export default async function AdminDashboardPage({ searchParams }: PageProps<"/a
         Revenue is net sales (items and adjustments, excluding tax, shipping and cancelled orders). Order figures exclude cancelled orders; click a box to see its orders.
       </p>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Panel
           title="Revenue trend"
           className="xl:col-span-2"
@@ -107,10 +113,10 @@ export default async function AdminDashboardPage({ searchParams }: PageProps<"/a
         </Panel>
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-2 2xl:grid-cols-12">
-        <Panel title="Recent orders" action={<PanelLink href="/admin/orders">View all</PanelLink>} className="2xl:col-span-5">
+      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-12">
+        <Can cap="orders.view"><Panel title="Recent orders" action={<span className="flex gap-3"><PanelLink href="/admin/orders?status=open">Open orders ({notifications.openOrders})</PanelLink><PanelLink href="/admin/orders">All orders</PanelLink></span>} className="2xl:col-span-5">
           <RecentOrders orders={data.recentOrders} />
-        </Panel>
+        </Panel></Can>
 
         <Panel title="Top sellers" className="2xl:col-span-4">
           <Tabs
@@ -123,11 +129,11 @@ export default async function AdminDashboardPage({ searchParams }: PageProps<"/a
           />
         </Panel>
 
-        <div className="grid gap-4 sm:grid-cols-2 sm:items-start xl:col-span-2 2xl:col-span-3 2xl:grid-cols-1 2xl:content-start">
-          <Panel title="Low stock alerts" action={<PanelLink href="/admin/products">View all</PanelLink>}>
+        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 sm:items-start xl:col-span-2 2xl:col-span-3 2xl:grid-cols-1 2xl:content-start">
+          <Can cap="products.view"><Panel title="Low stock alerts" action={<PanelLink href="/admin/products">View all</PanelLink>}>
             <LowStockList items={data.lowStock} />
-          </Panel>
-          <PendingApprovals count={data.pendingApprovals} />
+          </Panel></Can>
+          <Can cap="customer_approval.view"><PendingApprovals count={data.pendingApprovals} /></Can>
         </div>
       </div>
     </>

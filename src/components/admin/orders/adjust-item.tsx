@@ -8,7 +8,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icons";
 import { siteConfig } from "@/config/site";
 import { formatMoney, formatWeight } from "@/lib/format";
-import { isValidAmount, toGrams, type TaxRates, AMOUNT_STEP } from "@/lib/orders/calc";
+import { isValidAmount, toGrams, type TaxRates, amountStep } from "@/lib/orders/calc";
 import { previewOrderAdjustment } from "@/lib/orders/assemble";
 import type { Order } from "@/lib/types";
 import type { FieldErrors, OrderItem, Weight } from "@/lib/types";
@@ -21,6 +21,10 @@ interface AdjustItemProps {
   order: Pick<Order, "items" | "shipping" | "refunds" | "taxSnapshot" | "discount">;
   /** Quantity can change (until delivery). */
   allowQuantity?: boolean;
+  /** Agreed unit price can change. */
+  allowPrice?: boolean;
+  /** Packed weight can change. */
+  allowWeight?: boolean;
   /** Placeholder class rates for older orders without a tax snapshot. */
   taxRates: TaxRates;
 }
@@ -30,7 +34,7 @@ interface AdjustItemProps {
  * Never touches the catalog product. The preview uses the same pure calculator
  * as the server; the server recalculates and records the audit entry on save.
  */
-export function AdjustItemButton({ orderId, item, index, order, taxRates, allowQuantity = false }: AdjustItemProps) {
+export function AdjustItemButton({ orderId, item, index, order, taxRates, allowQuantity = false, allowPrice = true, allowWeight = true }: AdjustItemProps) {
   const current = item.fulfilledWeight ?? item.orderedWeight;
   const [open, setOpen] = useState(false);
   const [qty, setQty] = useState(String(item.quantity));
@@ -151,7 +155,7 @@ export function AdjustItemButton({ orderId, item, index, order, taxRates, allowQ
             </Field>
           )}
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field
+            {allowPrice && <Field
               id={`${p}-unitPrice`}
               label={`Unit price (per ${item.unitLabel}, ${siteConfig.currencySymbol})`}
               hint="The price agreed with the customer for this order."
@@ -162,14 +166,14 @@ export function AdjustItemButton({ orderId, item, index, order, taxRates, allowQ
                 type="number"
                 inputMode="decimal"
                 min={0}
-                step={AMOUNT_STEP}
+                step={amountStep()}
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 aria-invalid={Boolean(err("unitPrice"))}
                 aria-describedby={describedBy("unitPrice")}
               />
-            </Field>
-            <div className="space-y-1.5">
+            </Field>}
+            {allowWeight && <div className="space-y-1.5">
               <label htmlFor={`${p}-fulfilledWeight`} className="block text-sm font-medium">Packed (delivered) weight</label>
               <div className="flex gap-2">
                 <Input
@@ -195,7 +199,7 @@ export function AdjustItemButton({ orderId, item, index, order, taxRates, allowQ
                   Ordered {formatWeight(item.orderedWeight)}. {item.pricedByWeight ? "Changes the line amount." : "Does not change the price."}
                 </p>
               )}
-            </div>
+            </div>}
           </div>
 
           <Field id={`${p}-reason`} label="Reason" required hint="Required. Kept in the order's audit history." error={err("reason")}>

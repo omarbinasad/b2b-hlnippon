@@ -1,4 +1,6 @@
+import { AllowedLink } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
+import { getCapabilities } from "@/lib/auth/session";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionNotice, DemoEditingNotice } from "@/components/admin/demo-notice";
@@ -12,6 +14,7 @@ import { OrderDiscountButton } from "@/components/admin/orders/order-discount";
 import { RecordPaymentButton } from "@/components/admin/orders/record-payment";
 import { RefundButton } from "@/components/admin/orders/refund-dialog";
 import { ShippingChargeButton } from "@/components/admin/orders/shipping-charge";
+import { DeleteOrderButton } from "@/components/admin/orders/delete-order";
 import { OrderStatusControls } from "@/components/admin/orders/status-controls";
 import { AddressBlock, OrderItemsTable, OrderTotalsList, StatusHistoryList, StatusProgress } from "@/components/order/order-details";
 import { Badge, OrderStatusBadge, PaymentStatusBadge } from "@/components/ui/badge";
@@ -25,7 +28,7 @@ import { formatDate, formatDateTime, formatMoney, formatWeight } from "@/lib/for
 import { paymentBalance } from "@/lib/orders/assemble";
 import { isOrderRefund, refundSummary } from "@/lib/orders/refund";
 import { isOutOfStock, lineStock } from "@/lib/orders/stock";
-import { canAdjust, canChangeDeliveryDate, canChangeDiscount, canEditItems, paymentMethodLabels } from "@/lib/orders/status";
+import { canAdjust, canChangeDeliveryDate, canChangeDiscount, canEditItems, paymentMethodLabels, orderDeleteError } from "@/lib/orders/status";
 import type { OrderAdjustment, OrderChangeValues } from "@/lib/types";
 import { siteConfig } from "@/config/site";
 
@@ -87,8 +90,17 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
   const [order, settings] = await Promise.all([repositories.orders.getById(id), repositories.orders.calculationSettings()]);
   if (!order) notFound();
 
-  const adjustable = canAdjust(order.status);
-  const editable = canEditItems(order.status);
+  const caps = await getCapabilities();
+  const can = (c: string) => caps.includes(c);
+  const open = canEditItems(order.status);
+  const canItems = open && can("order_items.edit");
+  const canQuantity = open && can("order_quantities.edit");
+  const canPrice = canAdjust(order.status) && can("order_prices.edit");
+  const canWeight = canAdjust(order.status) && can("delivered_weight.edit");
+  const adjustable = canQuantity || canPrice || canWeight;
+  const canAddress = can("order_addresses.edit");
+  const canEdit = can("orders_edit.edit");
+  const deletable = can("orders.delete") && !orderDeleteError(order);
   const forPreview = { items: order.items, shipping: order.shipping, refunds: order.refunds, taxSnapshot: order.taxSnapshot, discount: order.discount };
   // Live catalog stock per line (orders keep snapshots; stock is never stored on the order).
   const productIds = [...new Set(order.items.map((i) => i.productId))];
@@ -120,33 +132,36 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
           <>
             <OrderStatusBadge status={order.status} />
             <PaymentStatusBadge status={order.paymentStatus} />
-            <Link href={`/admin/orders/${order.id}/invoice`} className={buttonClasses({ variant: "secondary", size: "sm" })}>
-              Invoice{order.invoices?.length ? ` (${order.invoices.at(-1)!.number})` : ""}
-            </Link>
+            {can("invoices.view") && (
+              <Link href={`/admin/orders/${order.id}/invoice`} className={buttonClasses({ variant: "secondary", size: "sm" })}>
+                Invoice{order.invoices?.length ? ` (${order.invoices.at(-1)!.number})` : ""}
+              </Link>
+            )}
+            {deletable && <DeleteOrderButton orderId={order.id} number={order.number} />}
           </>
         }
       />
       <ActionNotice notice={notice} />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0 space-y-6">
           <Card title="Delivery progress">
             <StatusProgress order={order} />
             <div className="mt-4">
-              <OrderStatusControls orderId={order.id} status={order.status} />
+              {can("order_status.edit") && <OrderStatusControls orderId={order.id} status={order.status} />}
             </div>
           </Card>
 
           <Card
             title="Items"
             description={
-              editable
+              canItems
                 ? "Add or remove items, or use Adjust to change a quantity, the packed weight or the agreed price. Catalog prices are not changed."
                 : adjustable
-                  ? "Use Adjust for packed weights or agreed prices. Items can't be added or removed after delivery."
+                  ? "Use Adjust for what your role can change on an item. Catalog prices are not changed."
                   : undefined
             }
-            actions={editable ? <AddItemButton orderId={order.id} customerId={order.customerId} excludeIds={[]} /> : undefined}
+            actions={canItems ? <AddItemButton orderId={order.id} customerId={order.customerId} excludeIds={[]} /> : undefined}
           >
             {unavailable.length > 0 && (
               <div className="mb-4">
@@ -162,22 +177,23 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
                 <LineStockControl orderId={order.id} productId={item.productId} variationId={item.variationId} itemName={item.name} info={stockFor(item)} />
               )}
               renderAction={
-                adjustable
+                adjustable || canItems
                   ? (item, index) => (
                       <>
-                        <AdjustItemButton orderId={order.id} item={item} index={index} order={forPreview} taxRates={settings.taxRates} allowQuantity={editable} />
-                        {editable && <RemoveItemButton orderId={order.id} item={item} lastItem={order.items.length === 1} />}
+                        {adjustable && <AdjustItemButton orderId={order.id} item={item} index={index} order={forPreview} taxRates={settings.taxRates} allowQuantity={canQuantity} allowPrice={canPrice} allowWeight={canWeight} />}
+                        {canItems && <AddItemButton orderId={order.id} customerId={order.customerId} excludeIds={[]} replace={item} />}
+                        {canItems && <RemoveItemButton orderId={order.id} item={item} lastItem={order.items.length === 1} />}
                       </>
                     )
                   : undefined
               }
             />
-            {editable && (
+            {canItems && (
               <div className="mt-3 rounded-ui border border-dashed border-line p-2">
                 <AddItemButton orderId={order.id} customerId={order.customerId} excludeIds={[]} variant="ghost" label="Add new item to this order" />
               </div>
             )}
-            {canChangeDiscount(order.status) && (
+            {canChangeDiscount(order.status) && can("order_discounts.edit") && (
               <div className="mt-4 flex justify-end">
                 <OrderDiscountButton orderId={order.id} current={order.discount} amount={order.totals.orderDiscount} />
               </div>
@@ -247,7 +263,7 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
                 ))}
               </ul>
             )}
-            <AddOrderNote orderId={order.id} />
+            {canEdit && <AddOrderNote orderId={order.id} />}
           </Card>
         </div>
 
@@ -261,7 +277,7 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
               </>
             ) : (
               <p className="font-medium">
-                <Link href={`/admin/customers?q=${encodeURIComponent(order.customerName)}`} className="text-brand hover:underline">{order.customerName}</Link>
+                <AllowedLink href={`/admin/customers?q=${encodeURIComponent(order.customerName)}`} className="text-brand hover:underline">{order.customerName}</AllowedLink>
               </p>
             )}
             {order.customerEmail && <p className="text-sm break-all">{order.customerEmail}</p>}
@@ -270,15 +286,15 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
 
           <Card
             title={pickup ? "Fulfilment" : "Shipping address"}
-            actions={!pickup && canEditItems(order.status) ? <OrderAddressEditButton orderId={order.id} which="shipping" current={order.shippingAddress} saved={savedAddresses} phoneOptional={Boolean(order.walkIn)} /> : undefined}
+            actions={!pickup && open && canAddress ? <OrderAddressEditButton orderId={order.id} which="shipping" current={order.shippingAddress} saved={savedAddresses} phoneOptional={Boolean(order.walkIn)} /> : undefined}
           >
             {order.shippingAddress ? <AddressBlock address={order.shippingAddress} /> : <p className="text-sm">Collected in store (no delivery address).</p>}
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-muted">{order.shipping.label} · <span className="tabular-nums">{formatMoney(order.shipping.amount)}</span></p>
-              {adjustable && <ShippingChargeButton orderId={order.id} label={order.shipping.label} amount={order.shipping.amount} />}
+              {canAdjust(order.status) && canEdit && <ShippingChargeButton orderId={order.id} label={order.shipping.label} amount={order.shipping.amount} />}
             </div>
             <div className="mt-2">
-              <DeliveryDateEditor orderId={order.id} date={order.requestedDeliveryDate?.slice(0, 10)} editable={canChangeDeliveryDate(order.status)} />
+              <DeliveryDateEditor orderId={order.id} date={order.requestedDeliveryDate?.slice(0, 10)} editable={canChangeDeliveryDate(order.status) && canEdit} />
             </div>
             {order.shipping.decision && (
               <p className="mt-2 text-xs text-muted">
@@ -291,7 +307,7 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
           </Card>
 
           {order.billingAddress && (
-            <Card title="Billing address" actions={adjustable ? <OrderAddressEditButton orderId={order.id} which="billing" current={order.billingAddress} saved={savedAddresses} phoneOptional={Boolean(order.walkIn)} /> : undefined}>
+            <Card title="Billing address" actions={canAdjust(order.status) && canAddress ? <OrderAddressEditButton orderId={order.id} which="billing" current={order.billingAddress} saved={savedAddresses} phoneOptional={Boolean(order.walkIn)} /> : undefined}>
               <AddressBlock address={order.billingAddress} />
             </Card>
           )}
@@ -318,13 +334,13 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
               </p>
             )}
             <div className="mt-4 flex flex-wrap gap-2">
-              {order.status !== "cancelled" && (order.paymentStatus === "unpaid" || order.paymentStatus === "invoiced") && (
+              {canEdit && order.status !== "cancelled" && (order.paymentStatus === "unpaid" || order.paymentStatus === "invoiced") && (
                 <RecordPaymentButton orderId={order.id} amount={order.totals.netTotal} methodLabel={paymentMethodLabels[order.payment.method]} />
               )}
-              {refunds.collected && refunds.refundable > 0 && <RefundButton orderId={order.id} summary={refunds} />}
-              {refunds.collected && refunds.overpaid > 0 && <RefundButton orderId={order.id} summary={refunds} kind="overpayment" />}
+              {caps.includes("refunds.refund") && refunds.collected && refunds.refundable > 0 && <RefundButton orderId={order.id} summary={refunds} />}
+              {caps.includes("refunds.refund") && refunds.collected && refunds.overpaid > 0 && <RefundButton orderId={order.id} summary={refunds} kind="overpayment" />}
             </div>
-            {order.refunds.length > 0 && (
+            {can("refunds.view") && order.refunds.length > 0 && (
               <div className="mt-4 border-t border-line pt-3">
                 <h3 className="text-sm font-medium">Refunds</h3>
                 <ul className="mt-2 space-y-3 text-sm">
@@ -370,7 +386,7 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
 
       <div className="mt-6 space-y-3">
         {order.status === "cancelled" && (
-          <Notice tone="info">This order is cancelled, so it can no longer be edited. Notes can still be added.</Notice>
+          <Notice tone="info">This order is cancelled, so it can no longer be edited.{canEdit ? " Notes can still be added." : ""}</Notice>
         )}
         <DemoEditingNotice />
       </div>

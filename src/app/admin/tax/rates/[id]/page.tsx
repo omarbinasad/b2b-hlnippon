@@ -43,7 +43,7 @@ export default async function EditTaxRatePage({ params }: PageProps<"/admin/tax/
               </ConfirmButton>
             </form>
           </Card>
-          <MockPermissionNote permission="tax.manage" />
+          <MockPermissionNote permission="taxes.manage" />
           <DemoEditingNotice />
         </aside>
       </div>

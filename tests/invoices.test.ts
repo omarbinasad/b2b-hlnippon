@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { CreateOrderInput, Invoice, Order } from "../src/lib/types/index.ts";
-import { followUpNumber, invoiceOutdated, invoiceSnapshot, nextInvoiceKind, nextInvoiceNumber } from "../src/lib/orders/invoice.ts";
+import { followUpNumber, invoiceOutdated, invoiceSnapshot, nextInvoiceKind, nextInvoiceNumber, invoiceSeller } from "../src/lib/orders/invoice.ts";
 import { validateCreateOrder } from "../src/lib/validation/order.ts";
 
 const actor = { id: "admin-1", name: "Demo admin", role: "admin" as const };
@@ -102,5 +102,18 @@ describe("walk-in orders", () => {
     const reg: CreateOrderInput = { ...base, walkIn: undefined, customerId: "cus-1" };
     assert.ok(validateCreateOrder(reg).fulfilment);
     assert.ok(validateCreateOrder({ ...reg, fulfilment: "delivery", shippingAddress: address, billingAddress: address })["shippingAddress.phone"]);
+  });
+});
+
+describe("invoice seller", () => {
+  const settings = { legalName: "Example Ltd", registrationNumber: "R1", taxNumber: "T1", documents: { showRegistrationOnInvoice: true, showTaxNumberOnInvoice: false } } as never;
+  const store = { storeName: "Example", phone: "03", email: "a@b.c", address: { addressLine1: "1 Main St", city: "Tokyo", postalCode: "100-0001" } } as never;
+  it("follows the document settings", () => {
+    const s = invoiceSeller(settings, store);
+    assert.equal(s.name, "Example Ltd");
+    assert.equal(s.registrationNumber, "R1");
+    assert.equal(s.taxNumber, undefined);
+    assert.deepEqual(s.addressLines, ["1 Main St", "Tokyo, 100-0001"]);
+    assert.equal(s.contact, "03 · a@b.c");
   });
 });

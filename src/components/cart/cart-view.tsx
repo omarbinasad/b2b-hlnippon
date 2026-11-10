@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/feedback";
 import { Icon } from "@/components/ui/icons";
 import { formatMoney } from "@/lib/format";
 import type { Cart, CartLine } from "@/lib/types";
+import { CouponField } from "./coupon-field";
 import { CartQuantityStepper } from "./quantity-stepper";
 
 /** Cart lines with quantity editing. Every change goes to the server, which re-prices the whole cart. */
@@ -54,6 +55,13 @@ export function CartView({ initial }: { initial: Cart }) {
           <dt>Items ({cart.lines.length})</dt>
           <dd className="font-semibold tabular-nums">{formatMoney(cart.itemsSubtotal)}</dd>
         </dl>
+        <CouponField coupon={cart.coupon} onChange={setCart} />
+        {cart.coupon?.discount !== undefined && (
+          <dl className="flex justify-between border-t border-line pt-2 text-sm">
+            <dt>After coupon</dt>
+            <dd className="font-semibold tabular-nums">{formatMoney(cart.itemsSubtotal - cart.coupon.discount)}</dd>
+          </dl>
+        )}
         <p className="text-xs text-muted">Delivery charge and tax are calculated at checkout for your delivery address.</p>
         {cart.lines.some((l) => l.pricedByWeight) && (
           <p className="text-xs text-muted">Items priced by weight are charged by the actual packed weight; the final amount can differ slightly.</p>

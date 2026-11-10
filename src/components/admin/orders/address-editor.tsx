@@ -1,14 +1,16 @@
 "use client";
 
+import { postcodeFieldLabel, regionFieldLabel } from "@/lib/locations";
 import { Field, Input, Select } from "@/components/ui/field";
 import { formatAddressLines } from "@/lib/format";
-import { JP_PREFECTURES, prefectureLabel } from "@/lib/locations";
+import { RegionField } from "@/components/ui/region-field";
 import type { Address, FieldErrors, OrderAddressInput } from "@/lib/types";
 
 export const emptyAddress: OrderAddressInput = {
   recipientName: "",
   companyName: "",
-  country: "JP",
+  // Filled from the store's country when saved.
+  country: "",
   prefecture: "",
   city: "",
   area: "",
@@ -35,8 +37,8 @@ const fields: { key: keyof OrderAddressInput; label: string; required?: boolean;
   { key: "recipientName", label: "Recipient name", required: true, autoComplete: "name" },
   { key: "phone", label: "Phone", required: true, autoComplete: "tel" },
   { key: "companyName", label: "Company", wide: true, autoComplete: "organization" },
-  { key: "postalCode", label: "Postcode / 郵便番号", required: true, autoComplete: "postal-code" },
-  { key: "prefecture", label: "Prefecture / 都道府県", required: true, autoComplete: "address-level1" },
+  { key: "postalCode", label: "Postcode", required: true, autoComplete: "postal-code" },
+  { key: "prefecture", label: "Region", required: true, autoComplete: "address-level1" },
   { key: "area", label: "Town / 町域", autoComplete: "address-level3" },
   { key: "city", label: "City / 市区町村", required: true, autoComplete: "address-level2" },
   { key: "addressLine1", label: "Street address", required: true, wide: true, autoComplete: "address-line1" },
@@ -93,21 +95,15 @@ export function AddressEditor({
           const error = errors[`${errorPrefix}.${f.key}`];
           return (
             <div key={f.key} className={f.wide ? "sm:col-span-2" : undefined}>
-              <Field id={fieldId} label={f.key === "phone" && phoneOptional ? "Phone (optional)" : f.label} required={f.required && !(f.key === "phone" && phoneOptional)} error={error}>
+              <Field id={fieldId} label={f.key === "phone" && phoneOptional ? "Phone (optional)" : (f.key === "prefecture" ? regionFieldLabel() : f.key === "postalCode" ? postcodeFieldLabel() : f.label)} required={f.required && !(f.key === "phone" && phoneOptional)} error={error}>
                 {f.key === "prefecture" ? (
-                  <Select
+                  <RegionField
                     id={fieldId}
                     value={value.prefecture}
                     onChange={(e) => onChange({ ...value, prefecture: e.target.value })}
                     autoComplete={f.autoComplete}
                     aria-invalid={Boolean(error)}
-                    aria-describedby={error ? `${fieldId}-error` : undefined}
-                  >
-                    <option value="">Choose…</option>
-                    {/* Keeps an older free-text value selectable until it is changed. */}
-                    {value.prefecture && !JP_PREFECTURES.includes(value.prefecture as (typeof JP_PREFECTURES)[number]) && <option value={value.prefecture}>{value.prefecture}</option>}
-                    {JP_PREFECTURES.map((p) => <option key={p} value={p}>{prefectureLabel(p)}</option>)}
-                  </Select>
+                    aria-describedby={error ? `${fieldId}-error` : undefined} />
                 ) : (
                   <Input
                     id={fieldId}

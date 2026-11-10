@@ -19,7 +19,7 @@ const ids = (v: unknown) => (Array.isArray(v) ? v.slice(0, 100).map((x) => str(x
 
 async function actor() {
   const a = await getAdminActor();
-  return a.permissions.includes("customer-groups.manage") ? { id: a.id, name: a.name, role: a.role } : null;
+  return a.permissions.includes("customers.edit") ? { id: a.id, name: a.name, role: a.role } : null;
 }
 
 const denied: GroupActionResult = { ok: false, errors: {}, message: "You don't have permission to manage groups (mock permissions)." };

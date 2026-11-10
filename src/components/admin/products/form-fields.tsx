@@ -203,11 +203,11 @@ export function DimensionsFields({
         ))}
         <div>
           <label htmlFor={`${id}-unit`} className="sr-only">Unit</label>
-          <select id={`${id}-unit`} value={value.unit} onChange={(e) => onChange({ ...value, unit: e.target.value as "cm" })} className={box}>
+          <Select id={`${id}-unit`} value={value.unit} onChange={(e) => onChange({ ...value, unit: e.target.value as "cm" })} className={box}>
             <option value="cm">cm</option>
             <option value="mm">mm</option>
             <option value="m">m</option>
-          </select>
+          </Select>
         </div>
       </div>
       {invalid && <p id={`${id}-error`} className="mt-1.5 text-xs text-danger">{errors[path]}</p>}

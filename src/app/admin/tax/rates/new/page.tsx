@@ -18,7 +18,7 @@ export default async function NewTaxRatePage() {
         <TaxRateForm others={rates.items} classes={classes} />
         <aside className="space-y-4">
           <TaxRules open />
-          <MockPermissionNote permission="tax.manage" />
+          <MockPermissionNote permission="taxes.manage" />
           <DemoEditingNotice />
         </aside>
       </div>

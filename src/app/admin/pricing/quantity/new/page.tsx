@@ -18,7 +18,7 @@ export default async function NewQuantityRulePage() {
         <QuantityRuleForm categories={categories} initialPicks={initialPicks} initialProduct={initialProduct} />
         <aside className="space-y-4">
           <QuantityPrecedence />
-          <MockPermissionNote permission="pricing.manage" />
+          <MockPermissionNote permission="pricing.edit" />
           <DemoEditingNotice />
         </aside>
       </div>

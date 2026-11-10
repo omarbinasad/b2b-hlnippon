@@ -25,7 +25,7 @@ export function PortalShell({ area, home, nav, navLabel, banner, userLabel, head
       <header className="border-b border-line bg-surface">
         <div className="mx-auto flex h-14 max-w-7xl items-center gap-3 px-4 sm:px-6">
           <Logo href={home} size="sm" />
-          <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-muted">{area}</span>
+          <span className="hidden rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium whitespace-nowrap text-muted sm:inline">{area}</span>
           <div className="ml-auto flex items-center gap-1 text-sm sm:gap-2">
             <span className="mr-1 hidden max-w-48 truncate text-muted sm:inline">{userLabel}</span>
             {headerActions}

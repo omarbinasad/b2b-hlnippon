@@ -35,7 +35,8 @@ export function Dialog({
     <dialog
       ref={ref}
       aria-label={title}
-      onClose={onClose}
+      // React passes a nested dialog's close event up: only this dialog's own closing counts.
+      onClose={(e) => { if (e.target === e.currentTarget) onClose(); }}
       className={cx(
         // text-left: dialogs opened from right-aligned table cells must not inherit their alignment.
         "m-auto max-h-[calc(100dvh-2rem)] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto rounded-ui border border-line bg-surface p-5 text-left font-normal text-foreground shadow-xl",

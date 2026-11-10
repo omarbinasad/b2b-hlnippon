@@ -1,4 +1,4 @@
-import type { OrderStatus, PaymentMethod, PaymentStatus } from "@/lib/types";
+import type { Order, OrderStatus, PaymentMethod, PaymentStatus } from "@/lib/types";
 
 /** Main delivery flow, in order. Cancelled is handled separately. */
 export const ORDER_FLOW = ["received", "preparing", "on_the_way", "delivered"] as const satisfies readonly OrderStatus[];
@@ -49,3 +49,19 @@ export const canChangeDeliveryDate = canEditItems;
 
 /** The order discount follows the same rule as price adjustments (post-delivery corrections allowed). */
 export const canChangeDiscount = canAdjust;
+
+/**
+ * Open orders: still being worked on (received, preparing, on the way). Delivered and cancelled orders are finished, and
+ * a fully refunded order is closed. The Orders badge, the dashboard link and the "Open orders" filter all use this rule.
+ */
+export const isOpenOrder = (o: { status: OrderStatus; paymentStatus: PaymentStatus }) =>
+  (o.status === "received" || o.status === "preparing" || o.status === "on_the_way") && o.paymentStatus !== "refunded";
+
+/** Why an order can't be deleted, or undefined when it can. Anything with a money or document trail stays on record. */
+export function orderDeleteError(order: Pick<Order, "status" | "paymentStatus" | "payment" | "refunds" | "invoices">) {
+  if (order.status !== "cancelled") return "Only cancelled orders can be deleted. Cancel it first.";
+  if (order.paymentStatus !== "unpaid" || order.payment.paidAt) return "This order has a payment recorded, so it stays on record.";
+  if (order.refunds.length) return "This order has a refund recorded, so it stays on record.";
+  if (order.invoices?.length) return "This order has an invoice, so it stays on record.";
+  return undefined;
+}

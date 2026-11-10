@@ -1,3 +1,4 @@
+import { Can } from "@/components/admin/capabilities-context";
 import type { Metadata, Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -37,7 +38,7 @@ export default async function AdminInvoicePage({ params, searchParams }: PagePro
         description="Issued invoices are frozen. If the order changes, issue a revision; for a cancelled order, a credit note. Nothing is ever overwritten."
         actions={
           <>
-            {next && <InvoiceActions orderId={order.id} kind={next} />}
+            {next && <Can cap="invoices.create"><InvoiceActions orderId={order.id} kind={next} /></Can>}
             <PrintButton />
           </>
         }

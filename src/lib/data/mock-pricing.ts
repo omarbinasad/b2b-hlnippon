@@ -1,5 +1,7 @@
 import "server-only";
 
+import { publicProducts } from "./mock-catalog";
+import { pricingCustomerById } from "./mock/standard-customer";
 import {
   checkQuantity,
   findPriceConflicts,
@@ -143,7 +145,7 @@ function savePriceRule(input: PriceRuleInput, existing?: PriceRule): SaveResult<
 
 export const mockPricingRepository: PricingRepository = {
   async getCustomerPrices(customerId, productIds) {
-    const customer = mockCustomers.find((c) => c.id === customerId);
+    const customer = pricingCustomerById(customerId);
     if (!customer || customer.status !== "approved") return [];
     return mockProducts
       .filter((p) => productIds.includes(p.id) && p.basePrice !== undefined)
@@ -154,7 +156,7 @@ export const mockPricingRepository: PricingRepository = {
   },
 
   async productIdsInPriceRange(customerId, { min, max }) {
-    const customer = mockCustomers.find((c) => c.id === customerId);
+    const customer = pricingCustomerById(customerId);
     if (!customer || customer.status !== "approved") return [];
     const inRange = (price: number | undefined) => price !== undefined && (min === undefined || price >= min) && (max === undefined || price <= max);
     return mockProducts
@@ -164,6 +166,20 @@ export const mockPricingRepository: PricingRepository = {
           : inRange(quotePrice(p, customer, undefined, 1)?.unitPrice),
       )
       .map((p) => p.id);
+  },
+
+  async priceBounds(customerId) {
+    const customer = pricingCustomerById(customerId);
+    if (!customer || customer.status !== "approved") return null;
+    // Only what the shop lists, so the slider's ends match the products a customer can find.
+    const prices = publicProducts(false)
+      .flatMap((p) =>
+        p.type === "variable"
+          ? p.variations.filter((v) => v.status === "active").map((v) => quotePrice(p, customer, v.id, 1)?.unitPrice)
+          : [quotePrice(p, customer, undefined, 1)?.unitPrice],
+      )
+      .filter((x): x is number => x !== undefined);
+    return prices.length ? { min: Math.min(...prices), max: Math.max(...prices) } : null;
   },
 
   async listRules({ search, audienceType, targetType, status, withConflicts, sort = "audience", dir, page, perPage } = {}) {

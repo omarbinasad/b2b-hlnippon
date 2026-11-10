@@ -1,3 +1,4 @@
+import { Can } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ActionNotice, DemoEditingNotice } from "@/components/admin/demo-notice";
@@ -38,9 +39,9 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/admin
         title="Categories"
         description="Organise products into categories and subcategories."
         actions={
-          <ButtonLink href="/admin/categories/new">
+          <Can cap="products.edit"><ButtonLink href="/admin/categories/new">
             <Icon name="plus" className="size-4" /> Add category
-          </ButtonLink>
+          </ButtonLink></Can>
         }
       />
       <div className="mb-4">
@@ -58,7 +59,7 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/admin
         perPage={categories.perPage}
       />
       {categories.items.length === 0 ? (
-        <EmptyState title="No categories match" action={<ButtonLink href="/admin/categories/new">Add category</ButtonLink>} />
+        <EmptyState title="No categories match" action={<Can cap="products.edit"><ButtonLink href="/admin/categories/new">Add category</ButtonLink></Can>} />
       ) : (
         <Table caption="Categories" density="compact">
           <thead>
@@ -90,14 +91,14 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/admin
                 </td>
                 <td><Badge tone={c.status === "active" ? "success" : "neutral"}>{c.status === "active" ? "Active" : "Hidden"}</Badge></td>
                 <td className="text-right">
-                  <Link
+                  <Can cap="products.edit"><Link
                     href={`/admin/categories/${c.id}/edit`}
                     className="inline-flex size-9 items-center justify-center rounded-ui text-muted hover:bg-surface-muted hover:text-foreground"
                     aria-label={`Edit ${c.name}`}
                     title="Edit"
                   >
                     <Icon name="pencil" className="size-4" />
-                  </Link>
+                  </Link></Can>
                 </td>
               </tr>
             ))}

@@ -1,13 +1,13 @@
 import type { Route } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { PriceRange } from "@/components/shop/price-range";
 import { Button } from "@/components/ui/button";
 import { Icon, type IconName } from "@/components/ui/icons";
-import { siteConfig } from "@/config/site";
 import type { CategoryNode } from "@/lib/catalog/category-tree";
 import { cx } from "@/lib/cx";
 import { stockOptions } from "@/lib/enums";
-import type { BrandFacet, StockStatus } from "@/lib/types";
+import type { BrandFacet, Money, StockStatus } from "@/lib/types";
 
 /** Current shop filters, parsed and validated from the URL by the shop page. */
 export interface ShopFilters {
@@ -184,9 +184,9 @@ const PRICE_NOTE: Record<Exclude<PriceAccess, "approved">, string> = {
   admin: "Admin preview: price filtering uses an approved customer's own prices.",
 };
 
-/** Customer price filter (GET form, works without JavaScript). Never rendered as usable for guests. */
-function Price({ access, filters, idPrefix, href }: { access: PriceAccess; filters: ShopFilters; idPrefix: string; href: ShopHref }) {
-  if (access !== "approved") {
+/** Customer price filter (slider in a GET form). Never rendered as usable for guests. */
+function Price({ access, filters, bounds, href }: { access: PriceAccess; filters: ShopFilters; bounds?: { min: Money; max: Money } | null; href: ShopHref }) {
+  if (access !== "approved" && access !== "admin") {
     return (
       <p className="flex gap-2 text-sm text-muted">
         <Icon name="lock" className="mt-0.5 size-4 shrink-0" />
@@ -202,29 +202,14 @@ function Price({ access, filters, idPrefix, href }: { access: PriceAccess; filte
       </p>
     );
   }
+  if (!bounds) return <p className="text-sm text-muted">No prices are available for your account yet.</p>;
   const keep = { q: filters.q, category: filters.category, brand: filters.brands.join(",") || undefined, stock: filters.stock, order: filters.order === "name" ? undefined : filters.order };
   return (
     <form action="/shop" className="space-y-3">
       {Object.entries(keep).map(([k, v]) => (v ? <input key={k} type="hidden" name={k} value={v} /> : null))}
-      <div className="grid grid-cols-2 gap-2">
-        {(["min", "max"] as const).map((k) => (
-          <div key={k}>
-            <label htmlFor={`${idPrefix}-${k}`} className="mb-1 block text-xs text-muted">{k === "min" ? "Min" : "Max"} ({siteConfig.currencySymbol})</label>
-            <input
-              id={`${idPrefix}-${k}`}
-              name={k}
-              type="number"
-              inputMode="numeric"
-              min={0}
-              step={1}
-              defaultValue={filters[k]}
-              placeholder={k === "min" ? "0" : "Any"}
-              className="h-9 w-full rounded-ui border border-line bg-surface px-2 text-base tabular-nums sm:text-sm"
-            />
-          </div>
-        ))}
-      </div>
-      <p className="text-xs text-muted">Your price per unit. Products without a price for your account are not included.</p>
+      {/* Keyed so the handles follow the URL after Apply, Clear or removing the filter chip. */}
+      <PriceRange key={`${filters.min}-${filters.max}`} bounds={bounds} min={filters.min} max={filters.max} />
+      <p className="text-xs text-muted">{access === "admin" ? "Standard wholesale price per unit (staff view). Products without a price are not included." : "Your price per unit. Products without a price for your account are not included."}</p>
       <div className="flex items-center gap-2">
         <Button type="submit" size="sm">Apply</Button>
         {(filters.min !== undefined || filters.max !== undefined) && (
@@ -242,14 +227,14 @@ export function FilterSidebar(props: {
   filters: ShopFilters;
   priceAccess: PriceAccess;
   href: ShopHref;
-  /** Unique per rendered copy (desktop sidebar / mobile disclosure) so form ids stay unique. */
-  idPrefix: string;
+  /** The approved customer's price range, for the price slider. */
+  priceBounds?: { min: Money; max: Money } | null;
 }) {
-  const { tree, brands, filters, priceAccess, href, idPrefix } = props;
+  const { tree, brands, filters, priceAccess, href, priceBounds } = props;
   return (
     <div className="space-y-4">
       <Section title="Price">
-        <Price access={priceAccess} filters={filters} idPrefix={idPrefix} href={href} />
+        <Price access={priceAccess} filters={filters} bounds={priceBounds} href={href} />
       </Section>
       <Section title="Availability">
         <Stock value={filters.stock} href={href} />

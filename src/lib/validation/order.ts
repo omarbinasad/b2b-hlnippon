@@ -3,8 +3,8 @@
  * The backend must enforce the same rules (plus stock, pricing and permissions).
  */
 // Relative import (not the @/ alias) so the Node test runner can load this module.
-import { isEmail, isJpPhone, isPostcode } from "../customers/contact.ts";
-import { AMOUNT_RULE, applyLineChange, isValidAmount, isValidPercent, lineAmounts, toGrams } from "../orders/calc.ts";
+import { isEmail, isPhone, isPostcode, phoneError, postcodeError } from "../customers/contact.ts";
+import { amountRule, applyLineChange, isValidAmount, isValidPercent, lineAmounts, toGrams } from "../orders/calc.ts";
 import type { AdjustItemInput, CreateOrderInput, FieldErrors, OrderAddressInput, OrderEdit, OrderItem, PaymentMethod } from "@/lib/types";
 
 export const ORDER_LIMITS = { maxQuantity: 10_000, note: 1000, reason: 300, lines: 100 } as const;
@@ -24,7 +24,7 @@ export function checkAddress(errors: FieldErrors, prefix: string, a: OrderAddres
   for (const [key, label] of required) {
     if (!String(a[key] ?? "").trim()) errors[`${prefix}.${key}`] = `${label} is required.`;
   }
-  if (a.postalCode && !isPostcode(a.postalCode)) errors[`${prefix}.postalCode`] = "Use a 7-digit postcode, e.g. 160-0023.";
+  if (a.postalCode && !isPostcode(a.postalCode)) errors[`${prefix}.postalCode`] = postcodeError();
 }
 
 export function validateCreateOrder(input: CreateOrderInput): FieldErrors {
@@ -37,7 +37,7 @@ export function validateCreateOrder(input: CreateOrderInput): FieldErrors {
     else if (name.length > 200) errors["walkIn.name"] = "Keep the name under 200 characters.";
     if ((w.companyName ?? "").length > 200) errors["walkIn.companyName"] = "Keep the company name under 200 characters.";
     if (w.email?.trim() && !isEmail(w.email)) errors["walkIn.email"] = "Enter a valid email address, or leave it empty.";
-    if (w.phone?.trim() && !isJpPhone(w.phone)) errors["walkIn.phone"] = "Enter a valid Japanese phone number, or leave it empty.";
+    if (w.phone?.trim() && !isPhone(w.phone)) errors["walkIn.phone"] = phoneError();
     if (input.customerId) errors.customerId = "Choose either a registered customer or a walk-in buyer.";
   } else if (!input.customerId) errors.customerId = "Choose a customer, or switch to a walk-in order.";
   const fulfilment = input.fulfilment ?? "delivery";
@@ -55,13 +55,13 @@ export function validateCreateOrder(input: CreateOrderInput): FieldErrors {
     const p = `items.${i}.`;
     if (!Number.isInteger(item.quantity) || item.quantity < 1 || item.quantity > ORDER_LIMITS.maxQuantity)
       errors[`${p}quantity`] = `Enter a whole number from 1 to ${ORDER_LIMITS.maxQuantity}.`;
-    if (!isValidAmount(item.unitPrice)) errors[`${p}unitPrice`] = `Enter a valid price (0 or more, ${AMOUNT_RULE}).`;
-    if (!isValidAmount(item.discount)) errors[`${p}discount`] = `Enter a valid discount (0 or more, ${AMOUNT_RULE}).`;
+    if (!isValidAmount(item.unitPrice)) errors[`${p}unitPrice`] = `Enter a valid price (0 or more, ${amountRule()}).`;
+    if (!isValidAmount(item.discount)) errors[`${p}discount`] = `Enter a valid discount (0 or more, ${amountRule()}).`;
     else if (!errors[`${p}quantity`] && !errors[`${p}unitPrice`] && item.discount > item.unitPrice * item.quantity)
       errors[`${p}discount`] = "The discount can't exceed the line amount.";
   });
   if (!input.shipping.label.trim()) errors["shipping.label"] = "Describe the delivery (e.g. route name).";
-  if (!isValidAmount(input.shipping.amount)) errors["shipping.amount"] = `Enter a valid amount (0 or more, ${AMOUNT_RULE}).`;
+  if (!isValidAmount(input.shipping.amount)) errors["shipping.amount"] = `Enter a valid amount (0 or more, ${amountRule()}).`;
   if (input.shipping.mode !== "suggested" && input.shipping.mode !== "manual") errors["shipping.mode"] = "Choose the suggested or an agreed charge.";
   const reason = input.shipping.reason?.trim() ?? "";
   if (input.shipping.mode === "manual" && reason.length < 5) errors["shipping.reason"] = "Explain the agreed charge (at least 5 characters).";
@@ -87,7 +87,7 @@ export function validateAdjustment(input: AdjustItemInput, item: Pick<OrderItem,
   const errors: FieldErrors = {};
   checkReason(errors, input.reason);
   if (input.quantity !== undefined && !validQuantity(input.quantity)) errors.quantity = `Enter a whole number from 1 to ${ORDER_LIMITS.maxQuantity}.`;
-  if (input.unitPrice !== undefined && !isValidAmount(input.unitPrice)) errors.unitPrice = `Enter a valid price (0 or more, ${AMOUNT_RULE}).`;
+  if (input.unitPrice !== undefined && !isValidAmount(input.unitPrice)) errors.unitPrice = `Enter a valid price (0 or more, ${amountRule()}).`;
   if (input.fulfilledWeight !== undefined && !(Number.isFinite(input.fulfilledWeight.value) && input.fulfilledWeight.value > 0))
     errors.fulfilledWeight = "Enter a weight greater than 0.";
 
@@ -110,8 +110,8 @@ export function validateAddLine(input: Extract<OrderEdit, { kind: "add" }>): Fie
   checkReason(errors, input.reason);
   if (!input.productId) errors.productId = "Choose a product.";
   if (!validQuantity(input.quantity)) errors.quantity = `Enter a whole number from 1 to ${ORDER_LIMITS.maxQuantity}.`;
-  if (!isValidAmount(input.unitPrice)) errors.unitPrice = `Enter a valid price (0 or more, ${AMOUNT_RULE}).`;
-  if (!isValidAmount(input.discount)) errors.discount = `Enter a valid discount (0 or more, ${AMOUNT_RULE}).`;
+  if (!isValidAmount(input.unitPrice)) errors.unitPrice = `Enter a valid price (0 or more, ${amountRule()}).`;
+  if (!isValidAmount(input.discount)) errors.discount = `Enter a valid discount (0 or more, ${amountRule()}).`;
   else if (!errors.quantity && !errors.unitPrice && input.discount > input.unitPrice * input.quantity) errors.discount = "The discount can't exceed the line amount.";
   return errors;
 }
@@ -123,7 +123,7 @@ export function validateOrderDiscount(input: Extract<OrderEdit, { kind: "discoun
   const d = input.discount;
   if (!d) return errors;
   if (d.type !== "fixed" && d.type !== "percent") errors.type = "Choose a fixed amount or a percentage.";
-  else if (d.type === "fixed" && !(isValidAmount(d.value) && d.value > 0)) errors.value = `Enter an amount greater than 0 (${AMOUNT_RULE}).`;
+  else if (d.type === "fixed" && !(isValidAmount(d.value) && d.value > 0)) errors.value = `Enter an amount greater than 0 (${amountRule()}).`;
   else if (d.type === "percent" && !(isValidPercent(d.value) && d.value > 0)) errors.value = "Enter a percentage above 0 and at most 100 (up to 2 decimals).";
   return errors;
 }

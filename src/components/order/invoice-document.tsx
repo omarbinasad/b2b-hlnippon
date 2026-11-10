@@ -1,9 +1,12 @@
 import { siteConfig } from "@/config/site";
+import { invoiceSeller } from "@/lib/orders/invoice";
 import { cx } from "@/lib/cx";
 import { formatAddressLines, formatDate, formatDateTime, formatMoney, formatWeight } from "@/lib/format";
 import { fromMinor, toMinor } from "@/lib/orders/calc";
 import { paymentMethodLabels, paymentStatusLabels } from "@/lib/orders/status";
-import type { Address, Invoice, InvoiceKind, InvoiceSnapshot, StoreSettings } from "@/lib/types";
+import Image from "next/image";
+import { company } from "@/config/runtime";
+import type { Address, CompanySettings, Invoice, InvoiceKind, InvoiceSnapshot, StoreSettings } from "@/lib/types";
 import { variationLabel } from "./order-details";
 
 const titles: Record<InvoiceKind, string> = { invoice: "Invoice", revision: "Revised invoice", credit_note: "Credit note" };
@@ -24,8 +27,12 @@ function AddressLines({ address }: { address: Address }) {
  * current order when nothing has been issued. Shared by the admin and customer invoice pages. Only the element
  * marked `data-invoice` prints (see globals.css).
  */
-export function InvoiceDocument({ invoice, draft, store }: { invoice?: Invoice; draft?: InvoiceSnapshot; store: StoreSettings }) {
+export function InvoiceDocument({ invoice, draft, store, settings = company() }: { invoice?: Invoice; draft?: InvoiceSnapshot; store: StoreSettings; /** Defaults to the current company settings; the settings page passes its unsaved draft. */ settings?: Pick<CompanySettings, "legalName" | "registrationNumber" | "taxNumber" | "documents" | "branding"> }) {
+  const docs = settings.documents;
+  const logo = settings.branding.logoLight ?? settings.branding.logoMain;
   const s = invoice?.snapshot ?? draft!;
+  // An issued document keeps the details it was issued with.
+  const seller = s.seller ?? invoiceSeller(settings, { ...store, storeName: store.storeName || siteConfig.name });
   const t = s.totals;
   const orderDiscount = t.orderDiscount ?? 0;
   const lineDiscounts = fromMinor(toMinor(t.discountTotal) - toMinor(orderDiscount));
@@ -41,16 +48,17 @@ export function InvoiceDocument({ invoice, draft, store }: { invoice?: Invoice; 
 
       <header className="flex flex-wrap items-start justify-between gap-6">
         <div>
-          <p className="text-lg font-semibold">{store.storeName || siteConfig.name}</p>
+          {docs.showLogoOnInvoice && logo && <Image src={logo.url} alt="" width={Math.round((48 * logo.width) / logo.height)} height={48} unoptimized={logo.url.startsWith("/media/")} className="mb-2 h-12 w-auto" />}
+          <p className="text-lg font-semibold">{seller.name}</p>
           <div className="mt-1 text-muted">
-            <p>{store.address.addressLine1}</p>
-            {store.address.addressLine2 && <p>{store.address.addressLine2}</p>}
-            <p>{[store.address.area, store.address.city, store.address.postalCode].filter(Boolean).join(", ")}</p>
-            {(store.phone || store.email) && <p>{[store.phone, store.email].filter(Boolean).join(" · ")}</p>}
+            {seller.addressLines.map((l) => <p key={l}>{l}</p>)}
+            {seller.contact && <p>{seller.contact}</p>}
+            {seller.registrationNumber && <p>Registration no. {seller.registrationNumber}</p>}
+            {seller.taxNumber && <p>Tax no. {seller.taxNumber}</p>}
           </div>
         </div>
         <div className="text-right">
-          <h1 className="text-xl font-semibold">{invoice ? titles[invoice.kind] : "Draft invoice"}</h1>
+          <h1 className="text-xl font-semibold">{invoice ? (invoice.kind === "invoice" && docs.invoiceTitle ? docs.invoiceTitle : titles[invoice.kind]) : `Draft ${(docs.invoiceTitle ?? "invoice").toLowerCase()}`}</h1>
           {invoice ? (
             <>
               <p className="font-medium tabular-nums">{invoice.number}</p>
@@ -125,7 +133,7 @@ export function InvoiceDocument({ invoice, draft, store }: { invoice?: Invoice; 
       <div className="mt-4 sm:ml-auto sm:max-w-sm">
         <dl className="space-y-1.5 [&_dd]:tabular-nums">
           <div className={row}><dt>Items</dt><dd>{formatMoney(t.itemsSubtotal)}</dd></div>
-          {lineDiscounts > 0 && <div className={row}><dt>Item discounts</dt><dd>−{formatMoney(lineDiscounts)}</dd></div>}
+          {lineDiscounts > 0 && <div className={row}><dt>{s.coupon ? `Coupon ${s.coupon.code}` : "Item discounts"}</dt><dd>−{formatMoney(lineDiscounts)}</dd></div>}
           {orderDiscount > 0 && (
             <div className={row}>
               <dt>Order discount{s.discount?.type === "percent" ? ` (${s.discount.value}%)` : ""}</dt>
@@ -135,7 +143,7 @@ export function InvoiceDocument({ invoice, draft, store }: { invoice?: Invoice; 
           <div className={row}><dt>{s.shipping.label}</dt><dd>{t.shippingTotal ? formatMoney(t.shippingTotal) : "Free"}</dd></div>
           {s.taxes.map((tax) => (
             <div key={tax.rateId ?? tax.taxClass} className={row}>
-              <dt className="text-muted">{tax.rateName ?? `Consumption tax (${tax.taxClass})`} {tax.rate}% (fictional){t.taxIncluded ? " included" : ""} on {formatMoney(tax.taxableAmount)}</dt>
+              <dt className="text-muted">{tax.rateName ?? `Tax (${tax.taxClass})`} {tax.rate}% (fictional){t.taxIncluded ? " included" : ""} on {formatMoney(tax.taxableAmount)}</dt>
               <dd>{formatMoney(tax.taxAmount)}</dd>
             </div>
           ))}
@@ -156,6 +164,8 @@ export function InvoiceDocument({ invoice, draft, store }: { invoice?: Invoice; 
         </dl>
       </div>
 
+      {docs.invoiceHeaderNote && <p className="mt-4 text-xs text-muted">{docs.invoiceHeaderNote}</p>}
+      {docs.invoiceFooter && <p className="mt-4 border-t border-line pt-3 text-xs whitespace-pre-line text-muted">{docs.invoiceFooter}</p>}
       {invoice?.reason && (
         <p className="mt-4 text-xs text-muted">{credit ? "Reason for credit" : "Reason for revision"}: {invoice.reason}</p>
       )}

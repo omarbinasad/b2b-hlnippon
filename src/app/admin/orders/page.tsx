@@ -1,3 +1,4 @@
+import { Can } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ActionNotice, DemoEditingNotice } from "@/components/admin/demo-notice";
@@ -28,8 +29,8 @@ const itemCount = (o: Order) => o.items.reduce((s, i) => s + i.quantity, 0);
 
 const ORDER_TYPES = ["first", "repeat", "walk_in"] as const satisfies readonly OrderType[];
 const orderTypeBadge: Record<OrderType, { label: string; tone: "success" | "info" | "neutral" }> = {
-  first: { label: "First order", tone: "success" },
-  repeat: { label: "Repeat order", tone: "info" },
+  first: { label: "First", tone: "success" },
+  repeat: { label: "Repeat", tone: "info" },
   walk_in: { label: "Walk-in", tone: "neutral" },
 };
 
@@ -43,6 +44,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
   const filters = {
     status: oneOf(param(sp, "status"), orderStatuses),
     excludeCancelled: param(sp, "status") === "active" || undefined,
+    open: param(sp, "status") === "open" || undefined,
     paymentStatus: oneOf(param(sp, "payment"), paymentStatuses),
     customerId: oneOf(param(sp, "customer"), customers.items.map((c) => c.id)),
     deliveryRouteId: oneOf(param(sp, "route"), routes.items.map((r) => r.id)),
@@ -51,7 +53,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
   const [orders, cancelled] = await Promise.all([
     repositories.orders.list({ ...state, ...filters, perPage: PER_PAGE }),
     // For the note shown when one customer's orders are listed (their order count excludes cancelled orders).
-    filters.customerId && !filters.status && !filters.excludeCancelled ? repositories.orders.list({ customerId: filters.customerId, status: "cancelled", perPage: 1 }) : undefined,
+    filters.customerId && !filters.status && !filters.excludeCancelled && !filters.open ? repositories.orders.list({ customerId: filters.customerId, status: "cancelled", perPage: 1 }) : undefined,
   ]);
   const forCustomer = filters.customerId ? customers.items.find((c) => c.id === filters.customerId) : undefined;
   const params = flatParams(sp);
@@ -66,9 +68,12 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
         title="Orders"
         description="Search, review and progress customer orders."
         actions={
-          <ButtonLink href="/admin/orders/new">
-            <Icon name="plus" className="size-4" /> New order
-          </ButtonLink>
+          <>
+            <Can cap="orders.export"><ButtonLink href={listHref(`${PATH}/export`, listParams, {}) as typeof PATH} prefetch={false} variant="secondary">Export CSV</ButtonLink></Can>
+            <Can cap="orders_create.create">
+              <ButtonLink href="/admin/orders/new"><Icon name="plus" className="size-4" /> New order</ButtonLink>
+            </Can>
+          </>
         }
       />
       <ActionNotice notice={notice} />
@@ -86,9 +91,9 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
         searchLabel="Search orders"
         searchPlaceholder="Order no. or customer"
         filters={[
-          { name: "status", label: "Fulfillment", options: [{ value: "active", label: "All except cancelled" }, ...orderStatusOptions], allLabel: "All statuses" },
+          { name: "status", label: "Fulfillment", options: [{ value: "open", label: "Open orders" }, { value: "active", label: "All except cancelled" }, ...orderStatusOptions], allLabel: "All statuses" },
           { name: "payment", label: "Payment", options: paymentStatusOptions, allLabel: "All payments" },
-          { name: "type", label: "Order type", options: ORDER_TYPES.map((t) => ({ value: t, label: orderTypeBadge[t].label })), allLabel: "First and repeat" },
+          { name: "type", label: "Order type", options: ORDER_TYPES.map((t) => ({ value: t, label: t === "walk_in" ? "Walk-in" : `${orderTypeBadge[t].label} order` })), allLabel: "All types" },
           { name: "customer", label: "Customer", options: customers.items.map((c) => ({ value: c.id, label: c.companyName })), allLabel: "All customers" },
           { name: "route", label: "Route", options: routes.items.map((r) => ({ value: r.id, label: r.name })), allLabel: "All routes" },
         ]}
@@ -105,7 +110,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
                 <SortHeader label="Order" field="number" defaultDir="desc" {...sorting} />
                 <SortHeader label="Placed" field="placed" defaultDir="desc" {...sorting} />
                 <SortHeader label="Customer" field="customer" {...sorting} />
-                <th scope="col">Order type</th>
+                <th scope="col">Type</th>
                 <th scope="col" className="text-right">Items</th>
                 <SortHeader label="Total" field="total" defaultDir="desc" className="text-right" {...sorting} />
                 <th scope="col">Payment</th>
@@ -138,7 +143,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
                     <td>
                       <div className="flex items-center justify-end gap-2">
                         {next && (
-                          <form action={advanceOrderStatusAction}>
+                          <Can cap="order_status.edit"><form action={advanceOrderStatusAction}>
                             <input type="hidden" name="id" value={order.id} />
                             <input type="hidden" name="status" value={next} />
                             <input type="hidden" name="returnTo" value={returnTo} />
@@ -149,7 +154,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
                             >
                               Mark {orderStatusLabels[next].toLowerCase()}
                             </button>
-                          </form>
+                          </form></Can>
                         )}
                         <Link
                           href={`/admin/orders/${order.id}`}
@@ -175,7 +180,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
           <EmptyState
             title="No orders yet"
             description="Orders placed in the store, or created here for a customer, will appear in this list."
-            action={<ButtonLink href="/admin/orders/new">Create an order</ButtonLink>}
+            action={<Can cap="orders_create.create"><ButtonLink href="/admin/orders/new">Create an order</ButtonLink></Can>}
           />
         )}
         <Pagination page={orders.page} totalPages={orders.totalPages} pathname={PATH} searchParams={listParams} />

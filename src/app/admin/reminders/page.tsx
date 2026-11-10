@@ -1,83 +1,50 @@
+import { Can } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
+import Link from "next/link";
+import { DemoEditingNotice } from "@/components/admin/demo-notice";
 import { Badge } from "@/components/ui/badge";
-import { EmptyState, PlannedFeatures } from "@/components/ui/feedback";
-import { ListToolbar, SortHeader } from "@/components/ui/list-controls";
+import { ButtonLink } from "@/components/ui/button";
+import { EmptyState, Notice } from "@/components/ui/feedback";
+import { Icon } from "@/components/ui/icons";
+import { ListToolbar } from "@/components/ui/list-controls";
 import { PageHeader } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { Table } from "@/components/ui/table";
 import { repositories } from "@/lib/data";
-import type { ReminderSortField } from "@/lib/data/repositories";
-import { activeOptions, options, reminderChannels, reminderTypes } from "@/lib/enums";
-import { formatDateTime, humanize } from "@/lib/format";
-import { boolParam, flatParams, listState, oneOf, param } from "@/lib/list-params";
+import { flatParams, param } from "@/lib/list-params";
 
-export const metadata: Metadata = { title: "Reminders" };
+export const metadata: Metadata = { title: "Reminder campaigns" };
 
 const PATH = "/admin/reminders";
-const SORTS = ["type", "lastSent"] as const satisfies readonly ReminderSortField[];
 
 export default async function RemindersPage({ searchParams }: PageProps<"/admin/reminders">) {
   const sp = await searchParams;
-  const state = listState(sp, SORTS, "type");
-  const reminders = await repositories.delivery.listReminders({
-    ...state,
-    type: oneOf(param(sp, "type"), reminderTypes),
-    channel: oneOf(param(sp, "channel"), reminderChannels),
-    active: boolParam(sp, "active"),
-    perPage: 20,
-  });
+  const [result, routes] = await Promise.all([repositories.reminders.list({ search: param(sp, "q") || undefined, page: Number(param(sp, "page")) || 1, perPage: 20 }), repositories.delivery.listRoutes({ perPage: 100 })]);
+  const routeName = (id: string) => routes.items.find((r) => r.id === id)?.name ?? "Schedule removed";
   const params = flatParams(sp);
-  const sorting = { sort: state.sort, dir: state.dir, pathname: PATH, params };
-
   return (
     <>
-      <PageHeader title="Reminders" description="Automated reorder, cutoff and payment reminders sent to customers." />
-      <ListToolbar
-        pathname={PATH}
-        params={params}
-        searchLabel="Search reminders"
-        searchPlaceholder="Message or schedule"
-        filters={[
-          { name: "type", label: "Type", options: options(reminderTypes), allLabel: "All types" },
-          { name: "channel", label: "Channel", options: options(reminderChannels), allLabel: "All channels" },
-          { name: "active", label: "Status", options: activeOptions, allLabel: "Active and paused" },
-        ]}
-        total={reminders.total}
-        page={reminders.page}
-        perPage={reminders.perPage}
-      />
+      <PageHeader title="Reminder campaigns" description="Remind customers in an area before its delivery day: one message if they have an order, another if they don't." actions={<Can cap="reminders.manage"><ButtonLink href="/admin/reminders/new"><Icon name="plus" className="size-4" /> Add campaign</ButtonLink></Can>} />
+      <div className="mb-4"><Notice>Preview only. This demo never sends email; the backend runs reminders as a scheduled job.</Notice></div>
+      <ListToolbar pathname={PATH} params={params} searchLabel="Search campaigns" searchPlaceholder="Campaign name" total={result.total} page={result.page} perPage={result.perPage} />
       <div className="space-y-6">
-        {reminders.items.length ? (
-          <Table caption="Reminders">
-            <thead>
-              <tr>
-                <SortHeader label="Type" field="type" {...sorting} />
-                <th scope="col">Audience</th>
-                <th scope="col">Schedule</th>
-                <th scope="col">Status</th>
-                <SortHeader label="Last sent" field="lastSent" defaultDir="desc" {...sorting} />
-              </tr>
-            </thead>
+        {result.items.length ? (
+          <Table caption="Reminder campaigns">
+            <thead><tr><th scope="col">Campaign</th><th scope="col">Schedule</th><th scope="col">Sends</th><th scope="col">Status</th></tr></thead>
             <tbody>
-              {reminders.items.map((r) => (
-                <tr key={r.id}>
-                  <td className="font-medium">
-                    {humanize(r.type)}
-                    <span className="block text-xs font-normal text-muted">{r.message}</span>
-                  </td>
-                  <td>{r.customerId ? "One customer" : r.deliveryRouteId ? "Delivery route" : "All customers"}</td>
-                  <td>{r.schedule} · {humanize(r.channel)}</td>
-                  <td><Badge tone={r.active ? "success" : "neutral"}>{r.active ? "Active" : "Paused"}</Badge></td>
-                  <td className="whitespace-nowrap">{r.lastSentAt ? formatDateTime(r.lastSentAt) : "—"}</td>
+              {result.items.map((c) => (
+                <tr key={c.id}>
+                  <td className="min-w-48"><Link href={`/admin/reminders/${c.id}`} className="font-medium text-brand hover:underline">{c.name}</Link></td>
+                  <td>{routeName(c.deliveryRouteId)}</td>
+                  <td className="whitespace-nowrap">{c.leadDays} day{c.leadDays === 1 ? "" : "s"} before, {c.sendTime}</td>
+                  <td><Badge tone={c.enabled ? "success" : "neutral"}>{c.enabled ? "On" : "Off"}</Badge></td>
                 </tr>
               ))}
             </tbody>
           </Table>
-        ) : (
-          <EmptyState title="No reminders match these filters" />
-        )}
-        <Pagination page={reminders.page} totalPages={reminders.totalPages} pathname={PATH} searchParams={params} />
-        <PlannedFeatures items={["Create and edit reminders", "Message templates and previews", "Sending handled by the backend scheduler", "Send log"]} />
+        ) : <EmptyState title="No campaigns" />}
+        <Pagination page={result.page} totalPages={result.totalPages} pathname={PATH} searchParams={params} />
+        <DemoEditingNotice />
       </div>
     </>
   );

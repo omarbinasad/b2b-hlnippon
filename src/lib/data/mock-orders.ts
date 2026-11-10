@@ -1,29 +1,34 @@
 import "server-only";
+import { logEmail } from "./mock-notify";
+import { pricingCustomerById } from "./mock/standard-customer";
+import { company } from "@/config/runtime";
 
 import { siteConfig } from "@/config/site";
 import { formatAddressLines, formatMoney } from "@/lib/format";
 import { isPostcode, normalizePostcode } from "@/lib/customers/contact";
 import { checkRefund, isCollected, isOrderRefund, paymentStatusAfterRefund, refundSummary } from "@/lib/orders/refund";
 import { paymentBalance, recalculate } from "@/lib/orders/assemble";
-import { AMOUNT_RULE, applyLineChange, fromMinor, isValidAmount, sumMoney, toMinor } from "@/lib/orders/calc";
-import { followUpNumber, invoiceSnapshot, latestInvoice, nextInvoiceKind, nextInvoiceNumber } from "@/lib/orders/invoice";
-import { canAdjust, canChangeDeliveryDate, canChangeDiscount, canEditItems, canTransition, orderStatusLabels, paymentMethodLabels } from "@/lib/orders/status";
-import type { Actor, Address, CheckoutInput, CreateOrderInput, ID, FieldErrors, Invoice, Order, OrderAddressInput, OrderAdjustment, OrderChangeValues, OrderEdit, OrderItem, OrderStatus, Refund, RefundRestock } from "@/lib/types";
+import { amountRule, applyLineChange, fromMinor, isValidAmount, sumMoney, toMinor } from "@/lib/orders/calc";
+import { followUpNumber, invoiceSeller, invoiceSnapshot, latestInvoice, nextInvoiceKind, nextInvoiceNumber } from "@/lib/orders/invoice";
+import { isOpenOrder, canAdjust, canChangeDeliveryDate, canChangeDiscount, canEditItems, canTransition, orderStatusLabels, paymentMethodLabels, orderDeleteError } from "@/lib/orders/status";
+import type { CheckoutShippingOption, Actor, Address, CheckoutInput, CreateOrderInput, ID, FieldErrors, Invoice, Order, OrderAddressInput, OrderAdjustment, OrderChangeValues, OrderEdit, OrderItem, OrderStatus, Refund, RefundRestock } from "@/lib/types";
 import { orderTypeResolver } from "@/lib/orders/order-type";
 import { checkAddress, checkReason, isIsoDate, validateAddLine, validateAdjustment, validateCreateOrder, validateOrderDiscount, ORDER_LIMITS } from "@/lib/validation/order";
 import { CART_LIMITS, checkDeliveryDate, orderPaymentMethod } from "@/lib/orders/cart";
-import { cartLines, clearCart, priceCartLine } from "./mock-cart";
+import { cartLines, checkoutCoupon, clearCart, priceCartLine } from "./mock-cart";
+import { recordCouponUse } from "./mock-coupons";
 import { mockPaymentSettingsRepository } from "./mock-payments";
 import { mockProductRepository } from "./mock-catalog";
 import { mockProducts } from "./mock/catalog";
 import { mockCustomers } from "./mock/customers";
 import { mockOrders, pricingSnapshot, snapshotItem } from "./mock/orders";
-import { mockSettingsRepository, mockShippingRepository } from "./mock-shipping";
+import { mockSettingsRepository, mockShippingRepository, pickupDetail, shippingGeneral } from "./mock-shipping";
 import { mockTaxRepository } from "./mock-tax";
 import { checkQuantity, tierLabel } from "@/lib/pricing/engine";
 import { mockTaxRates, quantityLimitsFor, quotePrice } from "./mock/pricing-rules";
 import { matches, paginate, sortBy, withinDates, type SortKey } from "./mock-utils";
 import type { OrderRepository, SaveResult } from "./repositories";
+import { storeCountry } from "@/lib/locations";
 
 /*
  * DEMO STORE: orders live in memory (globalThis) — changes survive page refreshes
@@ -45,7 +50,7 @@ const toAddress = (a: OrderAddressInput, type: Address["type"], label: string): 
   isDefault: false,
   recipientName: a.recipientName.trim(),
   companyName: a.companyName?.trim() || undefined,
-  country: a.country || "JP",
+  country: a.country || storeCountry(),
   prefecture: a.prefecture.trim(),
   city: a.city.trim(),
   area: a.area?.trim() || undefined,
@@ -78,7 +83,8 @@ const notFound = { ok: false as const, errors: {}, message: "Order not found." }
 const WALK_IN_BUYER = { id: "walk-in", status: "pending" as const };
 function pricingCustomer(customerId?: string) {
   if (!customerId) return WALK_IN_BUYER;
-  return mockCustomers.find((c) => c.id === customerId && c.status === "approved") ?? null;
+  const c = pricingCustomerById(customerId);
+  return c?.status === "approved" ? c : null;
 }
 
 /** Current year in the store's time zone (invoice numbers restart each year). */
@@ -128,10 +134,14 @@ async function buildOrder(rawInput: CreateOrderInput, actor: Actor): Promise<Sav
   const shippingQuote = Object.keys(errors).length || !input.shippingAddress
     ? undefined
     : (await mockShippingRepository.quote({
+        customerId: input.customerId,
+        couponCode: input.coupon?.code,
         address: input.shippingAddress,
         items: input.items.map((l) => ({ productId: l.productId, variationId: l.variationId, quantity: l.quantity, unitPrice: l.unitPrice, discount: l.discount })),
       })).quote;
-  const suggested = shippingQuote?.selected;
+  const chosenId = "methodId" in input.shipping ? input.shipping.methodId : undefined;
+  const chosenMethod = chosenId ? shippingQuote?.options.find((o) => o.available && o.method.id === chosenId) : undefined;
+  const suggested = chosenMethod ?? shippingQuote?.selected;
   if (shippingQuote && input.shipping.mode === "suggested") {
     if (!suggested) errors["shipping.amount"] = "No shipping rule applies to this address and cart — enter an agreed charge.";
     else if (suggested.cost !== input.shipping.amount)
@@ -169,6 +179,7 @@ async function buildOrder(rawInput: CreateOrderInput, actor: Actor): Promise<Sav
       statusHistory: [{ id: "e1", status: "received" as const, at, by: actor, note: online ? "Placed online by the customer" : customer ? "Created by admin on behalf of the customer" : "Walk-in order created by admin (no customer account)" }],
       paymentStatus: input.paymentMethod === "invoice" ? ("invoiced" as const) : ("unpaid" as const),
       payment: { method: input.paymentMethod },
+      coupon: input.coupon,
       // Snapshots: name, SKU, options, weight, tax class come from the catalog now; the price is the agreed one.
       items: input.items.map((line, i) => {
         const product = mockProducts.find((p) => p.id === line.productId)!;
@@ -222,7 +233,7 @@ const toOrderAddress = (a: Address): OrderAddressInput => ({
   phone: a.phone,
 });
 
-type Prepared = { ok: true; value: CreateOrderInput; actor: Actor } | { ok: false; errors: FieldErrors; message: string };
+type Prepared = { ok: true; value: CreateOrderInput; actor: Actor; shippingOptions: CheckoutShippingOption[] } | { ok: false; errors: FieldErrors; message: string };
 
 /**
  * Customer checkout → a create-order input. Everything is re-read on the server: lines are re-priced for the customer
@@ -252,36 +263,45 @@ async function prepareCheckout(customerId: ID, input: Omit<CheckoutInput, "idemp
   if ((input.customerNote ?? "").length > CART_LIMITS.note) errors.customerNote = `Keep the note under ${CART_LIMITS.note} characters.`;
   if (Object.keys(errors).length || !shipTo || !billTo || !paymentMethod) return { ok: false, errors, message: errors.cart ?? "Some details need attention." };
 
-  const items = lines.map((l) => ({ productId: l.productId, variationId: l.variationId, quantity: l.quantity, unitPrice: l.unitPrice!, discount: 0 }));
-  const { quote } = await mockShippingRepository.quote({ address: shipTo, items });
-  const selected = quote.selected;
+  // A coupon that stopped applying blocks the order rather than silently changing the price.
+  const coupon = checkoutCoupon(customer);
+  if (coupon && "error" in coupon) return { ok: false, errors: { coupon: coupon.error ?? "" }, message: `Coupon ${coupon.code}: ${coupon.error} Remove it to continue.` };
+  const items = lines.map((l) => ({ productId: l.productId, variationId: l.variationId, quantity: l.quantity, unitPrice: l.unitPrice!, discount: coupon?.allocations?.[l.id] ?? 0 }));
+  const { quote } = await mockShippingRepository.quote({ address: shipTo, items, customerId, couponCode: coupon?.code });
+  const available = quote.options.filter((o) => o.available && o.cost !== undefined);
+  const selected = available.find((o) => o.method.id === input.shippingMethodId) ?? quote.selected ?? available[0];
   if (!selected || selected.cost === undefined) {
-    const message = "We don’t deliver to this address with these items yet. Contact us to arrange delivery.";
+    const message = shippingGeneral().unavailableMessage;
     return { ok: false, errors: { shippingAddressId: message }, message };
   }
   return {
     ok: true,
     actor: { id: customer.id, name: customer.companyName, role: "customer" },
+    shippingOptions: available.map((o) => ({ methodId: o.method.id, name: o.method.name, type: o.method.type, cost: o.cost!, detail: o.method.type === "local_pickup" ? pickupDetail(o.method.locationId) ?? o.method.instructions : undefined })),
     value: {
       customerId,
       billingAddress: toOrderAddress(billTo),
       shippingAddress: toOrderAddress(shipTo),
       items,
-      shipping: { label: selected.method.name, amount: selected.cost, mode: "suggested" },
+      shipping: { label: selected.method.name, amount: selected.cost, mode: "suggested", methodId: selected.method.id },
       paymentMethod,
+      coupon: coupon ? { code: coupon.code, amount: coupon.amount ?? 0 } : undefined,
       customerNote: input.customerNote?.trim() || undefined,
       requestedDeliveryDate: input.requestedDeliveryDate || undefined,
     },
   };
 }
 
-export const mockOrderRepository: OrderRepository = {
-  async list({ customerId, status, excludeCancelled, paymentStatus, deliveryRouteId, orderType, search, from, to, sort = "placed", dir, page, perPage } = {}) {
+export const orderVars = (o: Order) => ({ customer_name: o.customerName, company_name: o.customerName, order_number: o.number, order_total: formatMoney(o.totals.total), order_status: orderStatusLabels[o.status] });
+
+export const mockOrderRepository: Omit<OrderRepository, "accountSummary" | "listInvoices"> = {
+  async list({ customerId, status, excludeCancelled, open, paymentStatus, deliveryRouteId, orderType, search, from, to, sort = "placed", dir, page, perPage } = {}) {
     const typeOf = orderTypeResolver(mockOrders);
     const filtered = mockOrders.filter(
       (o) =>
         (!orderType || typeOf(o) === orderType) &&
         (!excludeCancelled || o.status !== "cancelled") &&
+        (!open || status !== undefined || isOpenOrder(o)) &&
         (!customerId || o.customerId === customerId) &&
         (!status || o.status === status) &&
         (!paymentStatus || o.paymentStatus === paymentStatus) &&
@@ -412,8 +432,9 @@ export const mockOrderRepository: OrderRepository = {
     if (!prepared.ok) return prepared;
     const built = await buildOrder(prepared.value, prepared.actor);
     if (!built.ok) return built;
-    const { items, shipping, taxes, totals, paymentStatus } = built.value;
-    return { ok: true, value: clone({ items, shipping, taxes, totals, paymentStatus }) };
+    const { items, shipping, taxes, totals, paymentStatus, coupon } = built.value;
+    const shippingOptions = prepared.shippingOptions;
+    return { ok: true, value: clone({ items, shipping, taxes, totals, paymentStatus, coupon, shippingOptions, selectedMethodId: prepared.value.shipping.methodId }) };
   },
 
   async checkout(customerId, input) {
@@ -432,7 +453,9 @@ export const mockOrderRepository: OrderRepository = {
       const built = await buildOrder(prepared.value, prepared.actor);
       if (!built.ok) return built;
       checkoutKeys.set(key, built.value.id);
+      if (built.value.coupon) recordCouponUse(built.value.coupon.code, { orderId: built.value.id, orderNumber: built.value.number, customerId, customerName: built.value.customerName, discount: built.value.coupon.amount });
       clearCart(customerId);
+      logEmail("order_confirmation", built.value.customerEmail, orderVars(built.value));
       return store(built.value);
     } finally {
       if (checkoutKeys.get(key) === "pending") checkoutKeys.delete(key);
@@ -494,10 +517,10 @@ export const mockOrderRepository: OrderRepository = {
     if (Object.keys(errors).length) return { ok: false, errors, message: "Some fields need attention." };
     const at = now();
     const previous = latestInvoice(order);
-    const snapshot = invoiceSnapshot(order);
+    const snapshot = { ...invoiceSnapshot(order), seller: invoiceSeller(company(), await mockSettingsRepository.getStore()) };
     const number =
       input.kind === "invoice"
-        ? nextInvoiceNumber(mockOrders.flatMap((o) => (o.invoices ?? []).map((i) => i.number)), storeYear())
+        ? nextInvoiceNumber(mockOrders.flatMap((o) => (o.invoices ?? []).map((i) => i.number)), storeYear(), company().documents.invoicePrefix || "INV")
         : followUpNumber(order.invoices!, input.kind);
     const invoice: Invoice = {
       id: id("inv"),
@@ -541,6 +564,7 @@ export const mockOrderRepository: OrderRepository = {
       id: id("ref"),
       kind: input.kind,
       amount: check.amount,
+      method: input.method ?? "manual",
       reason: input.reason.trim(),
       at,
       by: actor,
@@ -554,6 +578,15 @@ export const mockOrderRepository: OrderRepository = {
     const payment = order.payment.amountPaid !== undefined ? { ...order.payment, amountPaid: keptAfter } : order.payment;
     const next = recalculate({ ...order, refunds, payment, updatedAt: at }, mockTaxRates);
     return store({ ...next, paymentStatus: paymentStatusAfterRefund(keptAfter, refunds.some(isOrderRefund)) });
+  },
+
+  async remove(orderId) {
+    const index = mockOrders.findIndex((o) => o.id === orderId);
+    if (index < 0) return notFound;
+    const blocked = orderDeleteError(mockOrders[index]);
+    if (blocked) return { ok: false, errors: {}, message: blocked };
+    mockOrders.splice(index, 1);
+    return { ok: true, value: { id: orderId } };
   },
 
   async recordPayment(orderId, input, actor) {
@@ -761,7 +794,7 @@ function applyEdit(order: Order, edit: OrderEdit, actor: Actor, at: string): App
       const label = edit.label.trim();
       if (!label) errors.label = "Describe the delivery (e.g. route name).";
       else if (label.length > 120) errors.label = "Keep the label under 120 characters.";
-      if (!isValidAmount(edit.amount)) errors.amount = `Enter a valid amount (0 or more, ${AMOUNT_RULE}).`;
+      if (!isValidAmount(edit.amount)) errors.amount = `Enter a valid amount (0 or more, ${amountRule()}).`;
       checkReason(errors, edit.reason);
       if (!errors.amount && !errors.label && toMinor(edit.amount) === toMinor(order.shipping.amount) && label === order.shipping.label) errors.amount = "Change the charge or its label.";
       if (Object.keys(errors).length) return invalid(errors);

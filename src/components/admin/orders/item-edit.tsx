@@ -11,7 +11,7 @@ import { Icon } from "@/components/ui/icons";
 import { formatMoney } from "@/lib/format";
 import type { FieldErrors, OrderableProduct, OrderItem } from "@/lib/types";
 import { EditPreview, useEditPreview } from "./edit-preview";
-import { AMOUNT_STEP } from "@/lib/orders/calc";
+import { amountStep } from "@/lib/orders/calc";
 
 const amount = (v: string) => (v.trim() === "" ? Number.NaN : Number(v));
 /** aria-describedby for a Field control: its error, else its hint. */
@@ -170,7 +170,7 @@ export function AddItemButton({ orderId, customerId, excludeIds, replace, varian
   return (
     <>
       <Button variant={replace ? "ghost" : variant} size="sm" onClick={() => setOpen(true)} aria-label={replace ? `Replace ${replace.name}` : undefined}>
-        {replace ? "Replace" : <><Icon name="plus" className="size-4" /> {label}</>}
+        {replace ? "Replace product" : <><Icon name="plus" className="size-4" /> {label}</>}
       </Button>
       <Dialog
         open={open}
@@ -247,7 +247,7 @@ export function AddItemButton({ orderId, customerId, excludeIds, replace, varian
                     type="number"
                     inputMode="decimal"
                     min={0}
-                    step={AMOUNT_STEP}
+                    step={amountStep()}
                     value={unitPrice}
                     onChange={(e) => {
                       setUnitPrice(e.target.value);
@@ -258,7 +258,7 @@ export function AddItemButton({ orderId, customerId, excludeIds, replace, varian
                   />
                 </Field>
                 <Field id={`${p}-discount`} label="Line discount" error={errors.discount}>
-                  <Input id={`${p}-discount`} type="number" inputMode="decimal" min={0} step={AMOUNT_STEP} value={discount} onChange={(e) => setDiscount(e.target.value)} aria-invalid={Boolean(errors.discount)} aria-describedby={describedBy(`${p}-discount`, errors.discount, false)} />
+                  <Input id={`${p}-discount`} type="number" inputMode="decimal" min={0} step={amountStep()} value={discount} onChange={(e) => setDiscount(e.target.value)} aria-invalid={Boolean(errors.discount)} aria-describedby={describedBy(`${p}-discount`, errors.discount, false)} />
                 </Field>
               </div>
               <ReasonField id={`${p}-reason`} value={reason} onChange={setReason} error={errors.reason} placeholder={replace ? "e.g. Original item out of stock — customer accepted this instead" : "e.g. Customer added by phone"} />

@@ -2,6 +2,7 @@ import "server-only";
 
 import { canSeeWholesalePrices, getViewer, type Viewer } from "@/lib/auth/session";
 import { repositories } from "@/lib/data";
+import { STANDARD_PRICING_ID } from "@/lib/pricing/standard";
 import type { Category, QuickOrderPage } from "@/lib/types";
 
 /** Who is looking — decides prices, ordering and the message shown on the quick order sheet. */
@@ -29,12 +30,12 @@ function categoryOptions(categories: Category[]) {
 
 /**
  * First page, category options and viewer access for the quick order sheet (Home and /account/quick-order).
- * Prices are resolved on the server for approved customers only.
+ * Prices are resolved on the server: an approved customer's own, or the standard price for staff.
  */
 export async function loadQuickOrderSheet(): Promise<QuickOrderSheetData> {
   const viewer = await getViewer();
   const access = quickOrderAccess(viewer);
-  const customerId = access === "approved" && viewer.kind === "customer" ? viewer.customerId : null;
+  const customerId = access === "approved" && viewer.kind === "customer" ? viewer.customerId : access === "admin" ? STANDARD_PRICING_ID : null;
   const [initial, categories] = await Promise.all([repositories.cart.quickOrder(customerId, {}), repositories.products.listCategories()]);
   return { initial, categories: categoryOptions(categories), access };
 }

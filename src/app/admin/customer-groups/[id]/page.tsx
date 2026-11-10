@@ -1,3 +1,4 @@
+import { Can, WriteGuard } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -42,7 +43,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<"/ad
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0 space-y-4">
           <Card title="Members">
-            <AddMembers groupId={group.id} groupNames={Object.fromEntries(groups.map((g) => [g.id, g.name]))} />
+            <Can cap="customers.edit"><AddMembers groupId={group.id} groupNames={Object.fromEntries(groups.map((g) => [g.id, g.name]))} /></Can>
           </Card>
           <ListToolbar
             pathname={path}
@@ -74,7 +75,7 @@ export default async function GroupPage({ params, searchParams }: PageProps<"/ad
                     <td><AccountStatusBadge status={c.status} /></td>
                     <td className="text-right tabular-nums">{formatNumber(c.orderCount)}</td>
                     <td className="text-right whitespace-nowrap tabular-nums">{c.orderCount ? formatMoney(c.totalSpend) : "—"}</td>
-                    <td className="text-right"><RemoveMember groupId={group.id} customerId={c.id} name={c.companyName} /></td>
+                    <td className="text-right"><Can cap="customers.edit"><RemoveMember groupId={group.id} customerId={c.id} name={c.companyName} /></Can></td>
                   </tr>
                 ))}
               </tbody>
@@ -87,12 +88,12 @@ export default async function GroupPage({ params, searchParams }: PageProps<"/ad
 
         <div className="min-w-0 space-y-4">
           <Card title="Group details">
-            <GroupForm group={group} />
+            <WriteGuard cap="customers.edit"><GroupForm group={group} /></WriteGuard>
           </Card>
           <Notice tone="info" title="Ready for pricing rules">
             Future price and quantity rules will target the group ID <code>{group.id}</code>. Renaming keeps the ID. Those rules are not built yet.
           </Notice>
-          <MockPermissionNote permission="customer-groups.manage" />
+          <MockPermissionNote permission="customers.edit" />
         </div>
       </div>
       <div className="mt-6">

@@ -1,5 +1,7 @@
 "use client";
 
+import { addressLabels } from "@/lib/locations";
+import { Select } from "@/components/ui/select";
 import { useState } from "react";
 
 export interface PrefectureDelivery {
@@ -14,17 +16,16 @@ export function DeliveryLookup({ prefectures }: { prefectures: PrefectureDeliver
   return (
     <div className="space-y-3">
       <div className="max-w-xs">
-        <label htmlFor="delivery-prefecture" className="mb-1.5 block text-sm font-medium">Your prefecture</label>
-        <select
+        <label htmlFor="delivery-prefecture" className="mb-1.5 block text-sm font-medium">Your {addressLabels().region.toLowerCase()}</label>
+        <Select
           id="delivery-prefecture"
           value={selected}
           onChange={(e) => setSelected(e.target.value)}
           aria-describedby="delivery-result"
-          className="h-10 w-full rounded-ui border border-line bg-surface px-3 text-base sm:text-sm"
         >
-          <option value="">Select your prefecture</option>
+          <option value="">Select your {addressLabels().region.toLowerCase()}</option>
           {prefectures.map((d) => <option key={d.prefecture} value={d.prefecture}>{d.prefecture}</option>)}
-        </select>
+        </Select>
       </div>
       <div id="delivery-result" role="status" aria-live="polite" className="min-h-16 text-sm">
         {!match ? (

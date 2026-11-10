@@ -18,7 +18,7 @@ export default async function NewPriceRulePage() {
         <PriceRuleForm {...data} />
         <aside className="space-y-4">
           <PricePrecedence open />
-          <MockPermissionNote permission="pricing.manage" />
+          <MockPermissionNote permission="pricing.edit" />
           <DemoEditingNotice />
         </aside>
       </div>

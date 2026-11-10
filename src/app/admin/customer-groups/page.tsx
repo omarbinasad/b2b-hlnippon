@@ -1,3 +1,4 @@
+import { Can } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ActionNotice, DemoEditingNotice } from "@/components/admin/demo-notice";
@@ -30,9 +31,9 @@ export default async function CustomerGroupsPage({ searchParams }: PageProps<"/a
         title="Customer groups"
         description="Group customers by type. Future price and quantity rules will target these groups."
         actions={
-          <ButtonLink href="/admin/customer-groups/new">
+          <Can cap="customers.edit"><ButtonLink href="/admin/customer-groups/new">
             <Icon name="plus" className="size-4" /> New group
-          </ButtonLink>
+          </ButtonLink></Can>
         }
       />
       <ActionNotice notice={notice} />
@@ -72,7 +73,7 @@ export default async function CustomerGroupsPage({ searchParams }: PageProps<"/a
             </tbody>
           </Table>
         ) : (
-          <EmptyState title="No groups match this search" action={<ButtonLink href="/admin/customer-groups/new" variant="secondary">New group</ButtonLink>} />
+          <EmptyState title="No groups match this search" action={<Can cap="customers.edit"><ButtonLink href="/admin/customer-groups/new" variant="secondary">New group</ButtonLink></Can>} />
         )}
         <Pagination page={groups.page} totalPages={groups.totalPages} pathname={PATH} searchParams={params} />
         <DemoEditingNotice />

@@ -20,4 +20,5 @@ export const sampleCatalogMeta = sample.meta;
 export const sampleCategories = sample.categories;
 export const sampleBrands = sample.brands;
 export const sampleTags = sample.tags;
-export const sampleProducts = sample.products;
+// The first product borrows a second image so the product gallery can be seen in the demo.
+export const sampleProducts = sample.products.map((p, i) => (i === 0 && sample.products[1]?.images[0] ? { ...p, images: [...p.images, sample.products[1].images[0]] } : p));

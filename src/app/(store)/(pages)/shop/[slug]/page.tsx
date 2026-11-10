@@ -2,13 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AddToCart } from "@/components/product/add-to-cart";
-import { ProductImage } from "@/components/product/product-image";
+import { ProductGallery } from "@/components/product/product-gallery";
 import { StockBadge } from "@/components/ui/badge";
-import { Notice, PlannedFeatures } from "@/components/ui/feedback";
+import { ButtonLink } from "@/components/ui/button";
+import { countryName, formatMoney, formatWeight } from "@/lib/format";
+import { Notice } from "@/components/ui/feedback";
 import { RichText } from "@/components/ui/rich-text";
 import { getShoppingCustomerId, getViewer } from "@/lib/auth/session";
+import { STANDARD_PRICING_ID } from "@/lib/pricing/standard";
 import { repositories } from "@/lib/data";
-import { countryName, formatWeight } from "@/lib/format";
 
 export async function generateMetadata({ params }: PageProps<"/shop/[slug]">): Promise<Metadata> {
   const product = await repositories.products.getBySlug((await params).slug);
@@ -24,8 +26,10 @@ export default async function ProductPage({ params }: PageProps<"/shop/[slug]">)
   const limits = await repositories.quantityRules.effectiveFor(product.id);
   // Approved customers get their own prices and the cart; everyone else sees product data only.
   const customerId = await getShoppingCustomerId();
-  const orderable = customerId ? await repositories.orders.orderableProduct(product.id, customerId) : null;
   const viewer = customerId ? null : await getViewer();
+  // Staff see the standard wholesale price for each option, without a cart.
+  const staffPrices = viewer?.kind === "admin" ? await repositories.orders.orderableProduct(product.id, STANDARD_PRICING_ID) : null;
+  const orderable = customerId ? await repositories.orders.orderableProduct(product.id, customerId) : null;
 
   return (
     <>
@@ -35,7 +39,7 @@ export default async function ProductPage({ params }: PageProps<"/shop/[slug]">)
       </nav>
 
       <div className="grid gap-6 md:grid-cols-2 md:gap-10">
-        <ProductImage image={product.images[0]} sizes="(min-width: 768px) 50vw, 100vw" priority />
+        <ProductGallery images={product.images} />
 
         <div className="space-y-4">
           <div>
@@ -97,8 +101,27 @@ export default async function ProductPage({ params }: PageProps<"/shop/[slug]">)
             <Notice tone="warning">This product has no price yet and can&apos;t be ordered online. Contact us to order it.</Notice>
           ) : viewer?.kind === "customer" ? (
             <Notice>Your business account is awaiting approval. Wholesale prices and ordering appear once it is approved.</Notice>
+          ) : viewer?.kind === "admin" && staffPrices ? (
+            <section aria-label="Prices" className="space-y-3 rounded-ui border border-line bg-surface p-4">
+              <ul className="divide-y divide-line">
+                {staffPrices.options.map((o) => (
+                  <li key={o.variationId ?? "single"} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm first:pt-0 last:pb-0">
+                    <span className="min-w-0">
+                      <span className="block font-medium">{o.label}</span>
+                      <span className="block text-xs text-muted">Min {o.minQuantity}{o.maxQuantity !== undefined ? ` · max ${o.maxQuantity}` : ""} · <StockBadge status={o.stock.status} /></span>
+                    </span>
+                    <span className="text-right">
+                      {o.customerPrice !== undefined ? <span className="font-semibold tabular-nums">{formatMoney(o.customerPrice)}</span> : <span className="text-xs text-muted">No price yet</span>}
+                      <span className="block text-xs text-muted">excl. tax</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted">Staff view: standard wholesale prices, before any customer&apos;s own prices. Staff don&apos;t have a cart.</p>
+              <ButtonLink href="/admin/orders/new" size="sm">Create an order for a customer</ButtonLink>
+            </section>
           ) : viewer?.kind === "admin" ? (
-            <Notice>Admin preview: prices and the cart are shown only to approved customers (switch “Demo view” to Approved customer to preview).</Notice>
+            <Notice tone="warning">This product has no price yet.</Notice>
           ) : (
             <Notice>
               Wholesale prices and ordering are available to approved business customers.{" "}
@@ -110,7 +133,6 @@ export default async function ProductPage({ params }: PageProps<"/shop/[slug]">)
       </div>
 
       <div className="mt-10">
-        <PlannedFeatures items={["Image gallery"]} />
       </div>
     </>
   );

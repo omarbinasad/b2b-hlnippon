@@ -23,7 +23,7 @@ const NOT_SHOPPER: Record<Exclude<CartDrawerAccess, "approved">, string> = {
  * Header cart button + right-hand cart panel: lines (quantity, remove), subtotal, View cart and Checkout. Data comes
  * from the server with the header (re-rendered after every cart change); this only shows it and sends changes.
  */
-export function CartDrawer({ access, cart, showLabel, className }: { access: CartDrawerAccess; cart?: Cart; showLabel?: boolean; className?: string }) {
+export function CartDrawer({ access, cart, showLabel, stacked, className }: { access: CartDrawerAccess; cart?: Cart; showLabel?: boolean; /** Icon above a label, for the phone menu. */ stacked?: boolean; className?: string }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const count = cart?.lines.length ?? 0;
@@ -42,17 +42,17 @@ export function CartDrawer({ access, cart, showLabel, className }: { access: Car
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-label={count > 0 ? `Cart (${count})` : "Cart"}
-        className={cx("relative inline-flex items-center gap-2 rounded-ui px-2 py-2 text-sm font-medium text-muted hover:text-foreground", className)}
+        className={cx("relative inline-flex items-center rounded-ui font-medium text-muted hover:text-foreground", stacked ? "flex-col gap-1" : "gap-2 px-2 py-2 text-sm", className)}
       >
         <span className="relative">
-          <Icon name="cart" className="size-5" />
+          <Icon name="cart" className={stacked ? "size-6" : "size-5"} />
           {count > 0 && (
             <span aria-hidden="true" className="absolute -top-2 -right-2.5 grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[0.625rem] leading-none font-semibold text-brand-contrast tabular-nums">
               {count > 99 ? "99+" : count}
             </span>
           )}
         </span>
-        {showLabel && <span className="hidden lg:inline">Cart</span>}
+        {stacked ? "Cart" : showLabel && <span className="hidden lg:inline">Cart</span>}
       </button>
 
       <dialog

@@ -31,7 +31,7 @@ const seedMethods: PaymentMethodSettings[] = [
       accountName: "Wholesale Store (demo, fictional)",
       bankName: "Sample Bank (fictional)",
       // Japanese style: account type + 7-digit account number.
-      accountNumber: "Ordinary 1234567",
+      accountNumber: "1234567",
       branchName: "Shinjuku branch (fictional)",
     },
     orderPaymentMethod: "bank_transfer",

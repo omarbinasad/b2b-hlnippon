@@ -4,6 +4,7 @@ import { TaxPreview, type TaxPreviewExample } from "@/components/admin/tax/tax-p
 import { Notice } from "@/components/ui/feedback";
 import { PageHeader } from "@/components/ui/page-header";
 import { repositories } from "@/lib/data";
+import { regionNames } from "@/lib/locations";
 
 export const metadata: Metadata = { title: "Tax preview" };
 
@@ -16,7 +17,7 @@ export default async function TaxPreviewPage() {
     repositories.pricing.productOption("p-011"),
   ]);
   const ex = (e: Omit<TaxPreviewExample, "lines"> & { lines: (TaxPreviewExample["lines"][number] | null)[] }): TaxPreviewExample | null =>
-    e.lines.every(Boolean) ? { ...e, lines: e.lines as TaxPreviewExample["lines"] } : null;
+    e.lines.every(Boolean) && regionNames().includes(e.address.prefecture) ? { ...e, lines: e.lines as TaxPreviewExample["lines"] } : null;
   const examples = [
     ex({ label: "Tokyo: standard + reduced classes, line discount", address: { prefecture: "Tokyo", city: "Chiyoda-ku", postalCode: "100-0001" }, lines: [juice && { product: juice, quantity: 10, discount: 200 }, rice && { product: rice, variationId: "p-001-5", quantity: 4 }] }),
     ex({ label: "Shinjuku postcode rate beats the country rate", address: { prefecture: "Tokyo", city: "Shinjuku-ku", postalCode: "160-0023" }, lines: [juice && { product: juice, quantity: 5 }] }),

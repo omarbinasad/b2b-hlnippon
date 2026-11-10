@@ -32,7 +32,7 @@ export function Popover({ trigger, triggerClassName, label, panelClassName, chil
     wasOpen.current = open;
     if (!open) return;
 
-    panelRef.current?.querySelector<HTMLElement>("input:checked, input, button, select")?.focus();
+    panelRef.current?.querySelector<HTMLElement>("input:checked, input:not([type=hidden]), button")?.focus();
     // Ignore keys a nested widget (e.g. a date picker) already handled.
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && !e.defaultPrevented && setOpen(false);
     const onPointer = (e: PointerEvent) => {

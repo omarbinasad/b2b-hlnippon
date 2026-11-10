@@ -1,8 +1,10 @@
 import { Skeleton } from "@/components/ui/feedback";
+import { LoadingMark } from "@/components/ui/navigation-progress";
 
 export default function OrdersLoading() {
   return (
     <div role="status" aria-label="Loading orders">
+      <LoadingMark />
       <div className="flex items-center justify-between gap-4">
         <Skeleton className="h-9 w-40" />
         <Skeleton className="h-10 w-32" />

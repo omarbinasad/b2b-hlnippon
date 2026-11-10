@@ -46,7 +46,7 @@ export default async function EditQuantityRulePage({ params }: PageProps<"/admin
             </Card>
           )}
           <QuantityPrecedence />
-          <MockPermissionNote permission="pricing.manage" />
+          <MockPermissionNote permission="pricing.edit" />
           <DemoEditingNotice />
         </aside>
       </div>

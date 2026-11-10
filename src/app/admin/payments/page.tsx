@@ -1,3 +1,4 @@
+import { Can } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ActionNotice, DemoEditingNotice, MockPermissionNote } from "@/components/admin/demo-notice";
@@ -58,27 +59,27 @@ export default async function PaymentMethodsPage({ searchParams }: PageProps<"/a
                   <ButtonLink href={`/admin/payments/${m.id}`} variant="secondary" size="sm">
                     <Icon name="pencil" className="size-4" /> Edit
                   </ButtonLink>
-                  <form action={paymentListAction}>
+                  <Can cap="payments.manage"><form action={paymentListAction}>
                     <input type="hidden" name="id" value={m.id} />
                     <input type="hidden" name="op" value={m.enabled ? "disable" : "enable"} />
                     <button type="submit" className={small} aria-label={`${m.enabled ? "Disable" : "Enable"} ${m.title}`}>
                       {m.enabled ? "Disable" : "Enable"}
                     </button>
-                  </form>
-                  <form action={paymentListAction}>
+                  </form></Can>
+                  <Can cap="payments.manage"><form action={paymentListAction}>
                     <input type="hidden" name="id" value={m.id} />
                     <input type="hidden" name="op" value="up" />
                     <button type="submit" className={small} disabled={i === 0} aria-label={`Move ${m.title} up`}>
                       <Icon name="arrowUp" className="size-4" />
                     </button>
-                  </form>
-                  <form action={paymentListAction}>
+                  </form></Can>
+                  <Can cap="payments.manage"><form action={paymentListAction}>
                     <input type="hidden" name="id" value={m.id} />
                     <input type="hidden" name="op" value="down" />
                     <button type="submit" className={small} disabled={i === methods.length - 1} aria-label={`Move ${m.title} down`}>
                       <Icon name="arrowDown" className="size-4" />
                     </button>
-                  </form>
+                  </form></Can>
                   <span className="text-xs text-muted">Updated {formatDateTime(m.updatedAt)}</span>
                 </div>
               </li>

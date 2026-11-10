@@ -12,7 +12,7 @@ const SWIPE_PX = 50;
  * Arrows, swipe, and pagination dots in a notch at the bottom. Autoplay pauses on hover, keyboard focus and hidden
  * tabs, and is off when the visitor prefers reduced motion. Off-screen slides are inert (not focusable or announced).
  */
-export function HeroSlider({ slides, label }: { slides: { key: string; label: string; content: ReactNode }[]; label: string }) {
+export function HeroSlider({ slides, label, arrows = true }: { slides: { key: string; label: string; content: ReactNode }[]; label: string; /** Side arrows. Off for photo slides, where they'd sit on the card. */ arrows?: boolean }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [reduced, setReduced] = useState(false);
@@ -86,12 +86,16 @@ export function HeroSlider({ slides, label }: { slides: { key: string; label: st
 
       {count > 1 && (
         <>
-          <button type="button" onClick={() => go(index - 1)} aria-label="Previous slide" className={cx(arrow, "left-4 hidden sm:grid")}>
-            <Icon name="arrowLeft" className="size-5" />
-          </button>
-          <button type="button" onClick={() => go(index + 1)} aria-label="Next slide" className={cx(arrow, "right-3 sm:right-4")}>
-            <Icon name="chevronRight" className="size-5" />
-          </button>
+          {arrows && (
+            <>
+              <button type="button" onClick={() => go(index - 1)} aria-label="Previous slide" className={cx(arrow, "left-4 hidden sm:grid")}>
+                <Icon name="arrowLeft" className="size-5" />
+              </button>
+              <button type="button" onClick={() => go(index + 1)} aria-label="Next slide" className={cx(arrow, "right-4 hidden sm:grid")}>
+                <Icon name="chevronRight" className="size-5" />
+              </button>
+            </>
+          )}
 
           {/* Pagination in a notch cut into the card's bottom edge (inner corners curve into the page background). */}
           <div
@@ -109,8 +113,8 @@ export function HeroSlider({ slides, label }: { slides: { key: string; label: st
                 aria-label={`Go to slide ${i + 1}: ${s.label}`}
                 aria-current={i === index ? "true" : undefined}
                 className={cx(
-                  "h-2 rounded-full transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
-                  i === index ? "w-10 bg-brand" : "w-2 bg-muted/40 hover:bg-muted",
+                  "h-2.5 rounded-full transition-all duration-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+                  i === index ? "w-11 bg-brand" : "w-2.5 bg-muted/35 hover:bg-muted",
                 )}
               />
             ))}

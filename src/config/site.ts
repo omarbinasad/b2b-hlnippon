@@ -1,69 +1,53 @@
 import type { Route } from "next";
+import type { IconName } from "@/components/ui/icons";
+import type { CompanyAddress } from "@/lib/types";
 import { STORE_CURRENCY } from "./currency";
+import { company } from "./runtime";
+
+/** Display line for the company address. */
+const addressLine = (a: CompanyAddress) => [a.addressLine1, a.addressLine2, a.area, a.city, a.prefecture, a.postalCode].filter(Boolean).join(", ");
+
+/** UTC offset of the store time zone right now, e.g. "+09:00", for date-only values. */
+function offsetOf(timeZone: string) {
+  const part = new Intl.DateTimeFormat("en", { timeZone, timeZoneName: "longOffset" }).formatToParts(new Date()).find((p) => p.type === "timeZoneName")?.value;
+  return part?.replace("GMT", "") || "+00:00";
+}
 
 /**
- * Brand and store settings — the single place to change the store name,
- * logo, contact details, and locale defaults. Brand colors live in
- * `src/app/globals.css` (the `--brand-*` variables).
- *
- * Locale values are mock defaults; the backend's store settings will own them later.
+ * Brand and store settings, read live from the company settings (`src/config/runtime.ts`). Every value is a getter, so
+ * read it when rendering, not at module level. Default values live in `src/config/sample-company.ts`.
  */
 export const siteConfig = {
-  name: "Wholesale Store",
-  shortName: "Store",
-  tagline: "Wholesale food supply for businesses across Japan",
-  description: "B2B wholesale ordering for restaurants, grocers and distributors across Japan.",
-  /**
-   * Logo files in /public/brand: `light` (dark text) shows in light theme, `dark` (white text)
-   * in dark theme and on the always-dark admin sidebar. Set both to null for the text placeholder.
-   */
-  logo: { light: "/brand/hl-logo-on-light.webp" as string | null, dark: "/brand/hl-logo-on-dark.webp" as string | null, width: 922, height: 266 },
-  contact: {
-    email: "info@example.com",
-    phone: "03-0000-0000",
-    address: "Placeholder address, Tokyo, Japan",
-    hours: "Mon–Fri 9:00–18:00",
+  get name() { return company().storeName; },
+  get shortName() { return company().storeName; },
+  get companyName() { return company().companyName; },
+  get legalName() { return company().legalName; },
+  get registrationNumber() { return company().registrationNumber; },
+  get tagline() { return company().tagline ?? ""; },
+  get description() { return company().description ?? ""; },
+  get logo() { return company().branding; },
+  get contact() {
+    const { address, ...c } = company().contact;
+    return { ...c, address: addressLine(address), addressParts: address };
   },
-  country: "JP",
-  /** From src/config/currency.ts (also read by the calculation engines). */
-  currency: STORE_CURRENCY.code,
-  currencySymbol: STORE_CURRENCY.symbol,
+  get country() { return company().locale.country; },
+  get currency() { return STORE_CURRENCY.code; },
+  get currencySymbol() { return STORE_CURRENCY.symbol; },
   /** Number grouping (1,234,567). */
-  numberLocale: "ja-JP",
-  dateLocale: "en-GB",
-  timeZone: "Asia/Tokyo",
-  /** Fixed UTC offset of the store time zone (Japan has no daylight saving), for date-only values. */
-  utcOffset: "+09:00",
+  get numberLocale() { return company().locale.numberLocale; },
+  get dateLocale() { return company().locale.dateLocale; },
+  get timeZone() { return company().locale.timeZone; },
+  get utcOffset() { return offsetOf(company().locale.timeZone); },
   /** First day of the week in date pickers: 0 = Sunday … 6 = Saturday. */
-  weekStartsOn: 0 as 0 | 1 | 2 | 3 | 4 | 5 | 6,
-} as const;
+  get weekStartsOn() { return company().locale.weekStartsOn; },
+};
 
-export type IconName =
-  | "dashboard"
-  | "box"
-  | "clipboard"
-  | "user"
-  | "users"
-  | "tag"
-  | "truck"
-  | "bell"
-  | "settings"
-  | "folder"
-  | "fileUser";
 
 export interface NavItem {
   href: Route;
   label: string;
   icon?: IconName;
 }
-
-export const storeNav: NavItem[] = [
-  { href: "/shop", label: "Product catalog" },
-  { href: "/#quick-order" as Route, label: "Quick order" },
-  { href: "/#delivery" as Route, label: "Delivery information" },
-  { href: "/about", label: "About us" },
-  { href: "/contact", label: "Contact" },
-];
 
 /** Single place for the B2B application call to action (shown in the store header). */
 export const applyCta: NavItem = { href: "/register", label: "Apply for B2B account" };
@@ -72,24 +56,86 @@ export const accountNav: NavItem[] = [
   { href: "/account", label: "Dashboard" },
   { href: "/account/quick-order", label: "Quick order" },
   { href: "/account/orders", label: "Orders" },
+  { href: "/account/lists", label: "Saved lists" },
+  { href: "/account/quotations", label: "Quotations" },
+  { href: "/account/invoices", label: "Invoices" },
+  { href: "/account/deliveries", label: "Deliveries" },
   { href: "/account/addresses", label: "Addresses" },
   { href: "/account/notifications", label: "Notifications" },
   { href: "/account/profile", label: "Profile" },
 ];
 
-export const adminNav: NavItem[] = [
-  { href: "/admin", label: "Dashboard", icon: "dashboard" },
-  { href: "/admin/products", label: "Products", icon: "box" },
-  { href: "/admin/categories", label: "Categories", icon: "folder" },
-  { href: "/admin/orders", label: "Orders", icon: "clipboard" },
-  { href: "/admin/customers", label: "Customers", icon: "user" },
-  { href: "/admin/customers/requests", label: "Registration requests", icon: "fileUser" },
-  { href: "/admin/customer-groups", label: "Customer groups", icon: "users" },
-  { href: "/admin/pricing", label: "Pricing rules", icon: "tag" },
-  { href: "/admin/shipping", label: "Shipping", icon: "truck" },
-  { href: "/admin/tax", label: "Tax", icon: "tag" },
-  { href: "/admin/payments", label: "Payments", icon: "settings" },
-  { href: "/admin/delivery", label: "Delivery routes", icon: "truck" },
-  { href: "/admin/reminders", label: "Reminders", icon: "bell" },
-  { href: "/admin/settings", label: "Settings", icon: "settings" },
+export interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+/** Admin sidebar. Screens planned in later batches join these groups as they are built. */
+export const adminNavGroups: NavGroup[] = [
+  { label: "Overview", items: [{ href: "/admin", label: "Dashboard", icon: "dashboard" }] },
+  {
+    label: "Commerce",
+    items: [
+      { href: "/admin/orders", label: "Orders", icon: "clipboard" },
+      { href: "/admin/orders/new", label: "Create order", icon: "plus" },
+      { href: "/admin/quotations", label: "Quotations", icon: "receipt" },
+      { href: "/admin/products", label: "Products", icon: "box" },
+      { href: "/admin/categories", label: "Categories", icon: "folder" },
+      { href: "/admin/brands", label: "Brands", icon: "tag" },
+      { href: "/admin/inventory", label: "Inventory", icon: "archive" },
+      { href: "/admin/customers", label: "Customers", icon: "user" },
+      { href: "/admin/customers/requests", label: "All Requests", icon: "fileUser" },
+      { href: "/admin/customer-groups", label: "Customer groups", icon: "users" },
+      { href: "/admin/pricing", label: "Pricing rules", icon: "tag" },
+      { href: "/admin/coupons", label: "Coupons", icon: "percent" },
+    ],
+  },
+  {
+    label: "Website content",
+    items: [
+      { href: "/admin/pages", label: "Pages", icon: "file" },
+      { href: "/admin/posts", label: "Posts", icon: "pencil" },
+      { href: "/admin/media", label: "Media library", icon: "image" },
+      { href: "/admin/menus", label: "Navigation menus", icon: "menu" },
+      { href: "/admin/homepage", label: "Homepage builder", icon: "store" },
+    ],
+  },
+  {
+    label: "Shipping & delivery",
+    items: [
+      { href: "/admin/shipping", label: "Shipping", icon: "truck" },
+      { href: "/admin/delivery", label: "Delivery schedules", icon: "calendar" },
+    ],
+  },
+  {
+    label: "Notifications",
+    items: [
+      { href: "/admin/reminders", label: "Reminder campaigns", icon: "bell" },
+      { href: "/admin/emails", label: "Email templates", icon: "mail" },
+      { href: "/admin/emails/logs", label: "Email logs", icon: "clipboard" },
+    ],
+  },
+  {
+    label: "Reports",
+    items: [{ href: "/admin/reports", label: "Reports", icon: "chart" }],
+  },
+  {
+    label: "Staff & permissions",
+    items: [
+      { href: "/admin/staff", label: "Staff", icon: "users" },
+      { href: "/admin/roles", label: "Roles", icon: "shieldCheck" },
+    ],
+  },
+  {
+    label: "Settings",
+    items: [
+      { href: "/admin/settings", label: "Settings", icon: "settings" },
+      // Only shown to a role that can't open Settings, where this is otherwise a tab.
+      { href: "/admin/settings/invoices", label: "Invoice settings", icon: "receipt" },
+      { href: "/admin/tax", label: "Tax", icon: "percent" },
+      { href: "/admin/payments", label: "Payments", icon: "coins" },
+    ],
+  },
 ];
+
+export const adminNav: NavItem[] = adminNavGroups.flatMap((g) => g.items);

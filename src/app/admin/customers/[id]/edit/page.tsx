@@ -5,6 +5,7 @@ import { CustomerDetailsForm } from "@/components/admin/customers/customer-detai
 import { DemoEditingNotice, MockPermissionNote } from "@/components/admin/demo-notice";
 import { PageHeader } from "@/components/ui/page-header";
 import { repositories } from "@/lib/data";
+import { allPages } from "@/lib/data/all-pages";
 
 export const metadata: Metadata = { title: "Edit customer" };
 
@@ -13,7 +14,7 @@ export default async function EditCustomerPage({ params }: PageProps<"/admin/cus
   const [customer, groups, routes] = await Promise.all([
     repositories.customers.getById(id),
     repositories.customers.listGroups(),
-    repositories.delivery.listRoutes({ perPage: 48 }),
+    allPages((page, perPage) => repositories.delivery.listRoutes({ page, perPage })),
   ]);
   if (!customer) notFound();
 
@@ -22,8 +23,8 @@ export default async function EditCustomerPage({ params }: PageProps<"/admin/cus
       <Link href={`/admin/customers/${customer.id}`} className="text-sm text-muted hover:text-foreground">← {customer.companyName}</Link>
       <PageHeader title="Edit customer" description="Addresses and approval status are managed on the customer page." />
       <div className="max-w-3xl space-y-4">
-        <CustomerDetailsForm customer={customer} groups={groups} routes={routes.items.map((r) => ({ id: r.id, name: r.name }))} />
-        <MockPermissionNote permission="customers.manage" />
+        <CustomerDetailsForm customer={customer} groups={groups} routes={routes.map((r) => ({ id: r.id, name: r.name }))} />
+        <MockPermissionNote permission="customers.edit" />
         <p className="text-xs text-muted">Past orders keep the name and contact details they were placed with.</p>
         <DemoEditingNotice />
       </div>

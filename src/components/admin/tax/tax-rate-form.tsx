@@ -1,11 +1,12 @@
 "use client";
 
+import { addressLabels, regionNames, storeCountry } from "@/lib/locations";
 import { useState, useTransition } from "react";
 import { saveTaxRateAction } from "@/app/admin/tax/actions";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/field";
-import { JP_PREFECTURES } from "@/lib/locations";
+import { RegionField } from "@/components/ui/region-field";
 import { validateTaxRate } from "@/lib/tax/engine";
 import type { FieldErrors, TaxClassOption, TaxLocation, TaxRate } from "@/lib/types";
 
@@ -15,7 +16,7 @@ export function TaxRateForm({ rate, others, classes }: { rate?: TaxRate; others:
   const [taxClass, setTaxClass] = useState(rate?.taxClass ?? "standard");
   const [enabled, setEnabled] = useState(rate?.enabled ?? true);
   const [type, setType] = useState<TaxLocation["type"]>(rate?.location.type ?? "country");
-  const [prefecture, setPrefecture] = useState(rate && (rate.location.type === "prefecture" || rate.location.type === "city") ? rate.location.prefecture : "Tokyo");
+  const [prefecture, setPrefecture] = useState(rate && (rate.location.type === "prefecture" || rate.location.type === "city") ? rate.location.prefecture : regionNames()[0] ?? "");
   const [city, setCity] = useState(rate?.location.type === "city" ? rate.location.city : "");
   const [postalCode, setPostalCode] = useState(rate?.location.type === "postcode" ? rate.location.postalCode : "");
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -23,7 +24,7 @@ export function TaxRateForm({ rate, others, classes }: { rate?: TaxRate; others:
   const [pending, startTransition] = useTransition();
 
   const location = (): TaxLocation =>
-    type === "postcode" ? { type, postalCode } : type === "city" ? { type, prefecture, city } : type === "prefecture" ? { type, prefecture } : { type: "country", country: "JP" };
+    type === "postcode" ? { type, postalCode } : type === "city" ? { type, prefecture, city } : type === "prefecture" ? { type, prefecture } : { type: "country", country: storeCountry() };
 
   const submit = () => {
     const input = { name, percent: percent.trim() === "" ? Number.NaN : Number(percent), taxClass, location: location(), enabled };
@@ -78,17 +79,15 @@ export function TaxRateForm({ rate, others, classes }: { rate?: TaxRate; others:
         <div className="grid gap-4 sm:grid-cols-3">
           <Field id="rate-loc-type" label="Location">
             <Select id="rate-loc-type" value={type} onChange={(e) => setType(e.target.value as TaxLocation["type"])}>
-              <option value="country">All of Japan (fallback)</option>
-              <option value="prefecture">Prefecture</option>
+              <option value="country">Whole country (fallback)</option>
+              <option value="prefecture">{addressLabels().region}</option>
               <option value="city">City</option>
-              <option value="postcode">Postcode</option>
+              <option value="postcode">{addressLabels().postcode}</option>
             </Select>
           </Field>
           {(type === "prefecture" || type === "city") && (
-            <Field id="rate-prefecture" label="Prefecture">
-              <Select id="rate-prefecture" value={prefecture} onChange={(e) => setPrefecture(e.target.value)}>
-                {JP_PREFECTURES.map((d) => <option key={d} value={d}>{d}</option>)}
-              </Select>
+            <Field id="rate-prefecture" label={addressLabels().region}>
+              <RegionField id="rate-prefecture" value={prefecture} onChange={(e) => setPrefecture(e.target.value)} />
             </Field>
           )}
           {type === "city" && (
@@ -97,7 +96,7 @@ export function TaxRateForm({ rate, others, classes }: { rate?: TaxRate; others:
             </Field>
           )}
           {type === "postcode" && (
-            <Field id="rate-postcode" label="Postcode">
+            <Field id="rate-postcode" label={addressLabels().postcode}>
               <Input id="rate-postcode" inputMode="numeric" maxLength={4} value={postalCode} onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, ""))} />
             </Field>
           )}

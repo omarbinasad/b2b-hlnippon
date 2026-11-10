@@ -22,6 +22,7 @@ interface Props {
 export function CheckoutForm({ shippingAddresses, billingAddresses, methods, today, idempotencyKey }: Props) {
   const [shippingAddressId, setShipping] = useState(() => (shippingAddresses.find((a) => a.isDefault) ?? shippingAddresses[0])?.id ?? "");
   const [billingAddressId, setBilling] = useState("");
+  const [shippingMethodId, setMethod] = useState("");
   const [paymentMethod, setPayment] = useState(methods[0]?.id ?? "");
   const [requestedDeliveryDate, setDate] = useState("");
   const [customerNote, setNote] = useState("");
@@ -33,12 +34,12 @@ export function CheckoutForm({ shippingAddresses, billingAddresses, methods, tod
   const [placed, setPlaced] = useState(false);
   const request = useRef(0);
 
-  const input = { shippingAddressId, billingAddressId, paymentMethod, requestedDeliveryDate, customerNote };
+  const input = { shippingMethodId, shippingAddressId, billingAddressId, paymentMethod, requestedDeliveryDate, customerNote };
 
   useEffect(() => {
     const n = ++request.current;
     startPreview(async () => {
-      const r = await checkoutPreviewAction({ shippingAddressId, billingAddressId, paymentMethod, requestedDeliveryDate });
+      const r = await checkoutPreviewAction({ shippingMethodId, shippingAddressId, billingAddressId, paymentMethod, requestedDeliveryDate });
       if (n !== request.current) return;
       if (r.ok) {
         setPreview(r.value);
@@ -50,7 +51,7 @@ export function CheckoutForm({ shippingAddresses, billingAddresses, methods, tod
         setMessage(r.message);
       }
     });
-  }, [shippingAddressId, billingAddressId, paymentMethod, requestedDeliveryDate]);
+  }, [shippingMethodId, shippingAddressId, billingAddressId, paymentMethod, requestedDeliveryDate]);
 
   const method = methods.find((m) => m.id === paymentMethod);
   const t = preview?.totals;
@@ -85,6 +86,21 @@ export function CheckoutForm({ shippingAddresses, billingAddresses, methods, tod
           ))}
           {errors.shippingAddressId && <p className="text-sm text-danger">{errors.shippingAddressId}</p>}
         </fieldset>
+
+        {preview && preview.shippingOptions.length > 0 && (
+          <fieldset className="space-y-2">
+            <legend className="font-semibold">Delivery method</legend>
+            {preview.shippingOptions.map((o) => (
+              <label key={o.methodId} className="flex cursor-pointer gap-3 rounded-ui border border-line bg-surface p-3 text-sm has-[:checked]:border-brand">
+                <input type="radio" name="shippingMethodId" value={o.methodId} checked={(shippingMethodId || preview.selectedMethodId) === o.methodId} onChange={() => setMethod(o.methodId)} />
+                <span className="min-w-0 flex-1">
+                  <span className="flex justify-between gap-2 font-medium"><span>{o.name}</span><span className="tabular-nums">{o.cost ? formatMoney(o.cost) : "Free"}</span></span>
+                  {o.detail && <span className="block text-xs text-muted">{o.detail}</span>}
+                </span>
+              </label>
+            ))}
+          </fieldset>
+        )}
 
         {billingAddresses.length > 0 && (
           <Field id="co-billing" label="Billing address" error={errors.billingAddressId}>
@@ -138,10 +154,10 @@ export function CheckoutForm({ shippingAddresses, billingAddresses, methods, tod
               </ul>
               <dl className="space-y-1.5 border-t border-line pt-3 text-sm [&_dd]:tabular-nums [&>div]:flex [&>div]:justify-between [&>div]:gap-3">
                 <div><dt>Items</dt><dd>{formatMoney(t!.itemsSubtotal)}</dd></div>
-                {t!.discountTotal > 0 && <div><dt>Discounts</dt><dd>−{formatMoney(t!.discountTotal)}</dd></div>}
+                {t!.discountTotal > 0 && <div><dt>{preview.coupon ? `Coupon ${preview.coupon.code}` : "Discounts"}</dt><dd>−{formatMoney(t!.discountTotal)}</dd></div>}
                 <div><dt>Delivery ({preview.shipping.label})</dt><dd>{t!.shippingTotal ? formatMoney(t!.shippingTotal) : "Free"}</dd></div>
                 {preview.taxes.map((tax) => (
-                  <div key={tax.rateId ?? tax.taxClass}><dt className="text-muted">{tax.rateName ?? "Consumption tax"} {tax.rate}% (fictional demo rate){t!.taxIncluded ? " included" : ""}</dt><dd>{formatMoney(tax.taxAmount)}</dd></div>
+                  <div key={tax.rateId ?? tax.taxClass}><dt className="text-muted">{tax.rateName ?? "Tax"} {tax.rate}% (fictional demo rate){t!.taxIncluded ? " included" : ""}</dt><dd>{formatMoney(tax.taxAmount)}</dd></div>
                 ))}
                 <div className="border-t border-line pt-2 text-base font-semibold"><dt>Total</dt><dd>{formatMoney(t!.total)}</dd></div>
               </dl>

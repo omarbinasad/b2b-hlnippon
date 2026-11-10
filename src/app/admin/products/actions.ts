@@ -8,7 +8,7 @@
 import type { Route } from "next";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getAdminActor } from "@/lib/auth/session";
+import { actorWith, getAdminActor } from "@/lib/auth/session";
 import { repositories } from "@/lib/data";
 import { productStatuses } from "@/lib/enums";
 import type { AttributeValue, Brand, Category, Dimensions, FieldErrors, ProductInput, ProductPick, ProductStatus, VariationInput } from "@/lib/types";
@@ -150,6 +150,7 @@ function toProductInput(raw: unknown): ProductInput {
 // --- Actions ------------------------------------------------------------------------
 
 export async function saveProductAction(id: string | null, raw: ProductInput): Promise<SaveProductState> {
+  if (!(await actorWith(id ? "products.edit" : "products.create"))) return { ok: false, errors: {}, message: "You don't have permission to do this." };
   const input = toProductInput(raw);
   const result = id ? await repositories.products.update(id, input, (await getAdminActor()).name) : await repositories.products.create(input);
   if (!result.ok) return { ok: false, errors: result.errors, message: result.message ?? "The product could not be saved." };
@@ -173,6 +174,7 @@ const safeReturn = (v: FormDataEntryValue | null) => {
 const withNotice = (url: string, notice: string) => `${url}${url.includes("?") ? "&" : "?"}notice=${notice}`;
 
 export async function duplicateProductAction(formData: FormData) {
+  if (!(await actorWith("products.create"))) redirect(withNotice(safeReturn(formData.get("returnTo")), "error") as Route);
   const result = await repositories.products.duplicate(String(formData.get("id") ?? ""));
   if (!result.ok) redirect(withNotice(safeReturn(formData.get("returnTo")), "error") as Route);
   revalidatePath("/admin/products");
@@ -181,6 +183,8 @@ export async function duplicateProductAction(formData: FormData) {
 
 export async function setProductStatusAction(formData: FormData) {
   const status = oneOf<ProductStatus>(formData.get("status"), productStatuses, "draft");
+  // Archiving hides a product from the store, so it counts as removing it; restoring is an edit.
+  if (!(await actorWith(status === "archived" ? "products.delete" : "products.edit"))) redirect(withNotice(safeReturn(formData.get("returnTo")), "error") as Route);
   const result = await repositories.products.setStatus(String(formData.get("id") ?? ""), status);
   revalidatePath("/admin/products");
   const returnTo = safeReturn(formData.get("returnTo")).replace(/([?&])notice=[^&]*&?/, "$1").replace(/[?&]$/, "");
@@ -190,20 +194,26 @@ export async function setProductStatusAction(formData: FormData) {
 // --- Inline creation from the product form (demo store) ----------------------------
 
 type Created<T> = { ok: true; value: T } | { ok: false; error: string };
+const noPermission = { ok: false as const, error: "You don't have permission to do this." };
+/** These run from the product form, on a new product as well as an existing one. */
+const canEditCatalog = async () => Boolean((await actorWith("products.edit")) ?? (await actorWith("products.create")));
 const firstError = (errors: FieldErrors, message?: string) => Object.values(errors)[0] ?? message ?? "Could not be created.";
 
 export async function createBrandAction(name: string): Promise<Created<Brand>> {
+  if (!(await canEditCatalog())) return noPermission;
   const result = await repositories.catalogSettings.createBrand(str(name, 100));
   return result.ok ? result : { ok: false, error: firstError(result.errors, result.message) };
 }
 
 /** Adds a reusable value to a store-wide attribute (available to every product). */
 export async function createAttributeValueAction(attributeId: string, name: string): Promise<Created<AttributeValue>> {
+  if (!(await canEditCatalog())) return noPermission;
   const result = await repositories.catalogSettings.createAttributeValue(str(attributeId, 100), str(name, 100));
   return result.ok ? result : { ok: false, error: firstError(result.errors, result.message) };
 }
 
 export async function quickCreateCategoryAction(name: string, parentId?: string): Promise<Created<Category>> {
+  if (!(await canEditCatalog())) return noPermission;
   const clean = str(name, 100).trim();
   const result = await repositories.categories.create({
     name: clean,

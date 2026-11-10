@@ -10,6 +10,7 @@ import { mockTax } from "./mock/tax";
 import { matches, paginate } from "./mock-utils";
 import { mockShippingRepository } from "./mock-shipping";
 import type { TaxPreviewLine, TaxRateListItem, TaxRepository } from "./repositories";
+import { storeCountry } from "@/lib/locations";
 
 /*
  * DEMO STORE: tax settings and FICTIONAL rates live in memory (globalThis). The backend
@@ -36,7 +37,7 @@ function normalize(input: TaxRateInput): TaxRateInput {
       l.type === "postcode" ? { type: l.type, postalCode: l.postalCode.trim() }
       : l.type === "city" ? { type: l.type, prefecture: l.prefecture, city: l.city.trim() }
       : l.type === "prefecture" ? { type: l.type, prefecture: l.prefecture }
-      : { type: "country", country: "JP" },
+      : { type: "country", country: storeCountry() },
   };
 }
 

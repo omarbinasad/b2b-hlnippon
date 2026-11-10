@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { Logo } from "@/components/ui/logo";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
@@ -11,6 +12,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
       <Link href="/shop" className="mt-6 text-sm text-muted hover:text-foreground">
         ← Back to store
       </Link>
+      <MobileBottomNav />
     </div>
   );
 }

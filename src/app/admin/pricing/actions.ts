@@ -2,13 +2,13 @@
 
 /*
  * Pricing and quantity rule mutations. DEMO: rules live in server memory only and
- * prices are demo calculations. TODO(auth): permission is mocked ("pricing.manage");
+ * prices are demo calculations. TODO(auth): permission is mocked;
  * the backend must authorize every call and enforce the rules at cart and checkout.
  */
 import type { Route } from "next";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getAdminActor } from "@/lib/auth/session";
+import { actorWith } from "@/lib/auth/session";
 import { repositories } from "@/lib/data";
 import type { RuleProductOption } from "@/lib/data/repositories";
 import type { FieldErrors, PriceAdjustment, PriceRuleAudience, PriceRuleInput, PriceTier, QuantityLimitRuleInput, RuleStatus, RuleTarget } from "@/lib/types";
@@ -55,11 +55,6 @@ const tiers = (v: unknown): PriceTier[] =>
     return { minQuantity: num(t.minQuantity), maxQuantity: optNum(t.maxQuantity), adjustment: adjustment(t.adjustment) };
   });
 
-async function actor() {
-  const a = await getAdminActor();
-  return a.permissions.includes("pricing.manage") ? { id: a.id, name: a.name, role: a.role } : null;
-}
-
 const denied: RuleActionResult = { ok: false, errors: {}, message: "You don't have permission to manage rules (mock permissions)." };
 const failed = (r: { errors: FieldErrors; message?: string }): RuleActionResult => ({ ok: false, errors: r.errors, message: r.message ?? "Some fields need attention." });
 
@@ -71,7 +66,7 @@ function refresh() {
 // --- Price rules ---------------------------------------------------------------------------
 
 export async function savePriceRuleAction(id: string | null, raw: unknown): Promise<RuleActionResult> {
-  const by = await actor();
+  const by = await actorWith(id ? "pricing.edit" : "pricing.create");
   if (!by) return denied;
   const v = obj(raw);
   const input: PriceRuleInput = {
@@ -92,7 +87,7 @@ export async function savePriceRuleAction(id: string | null, raw: unknown): Prom
 
 /** List toggle (form action). */
 export async function togglePriceRuleAction(formData: FormData) {
-  const by = await actor();
+  const by = await actorWith("pricing.edit");
   const returnTo = String(formData.get("returnTo") ?? "");
   const back = returnTo.startsWith("/admin/pricing") && !returnTo.startsWith("//") ? returnTo : "/admin/pricing";
   const ok = by && (await repositories.pricing.setRuleStatus(String(formData.get("id") ?? ""), status(formData.get("status")), by)).ok;
@@ -107,7 +102,7 @@ export async function productOptionAction(productId: string): Promise<RuleProduc
 // --- Quantity rules --------------------------------------------------------------------------
 
 export async function saveQuantityRuleAction(id: string | null, raw: unknown): Promise<RuleActionResult> {
-  const by = await actor();
+  const by = await actorWith(id ? "pricing.edit" : "pricing.create");
   if (!by) return denied;
   const v = obj(raw);
   const input: QuantityLimitRuleInput = {
@@ -125,7 +120,7 @@ export async function saveQuantityRuleAction(id: string | null, raw: unknown): P
 }
 
 export async function toggleQuantityRuleAction(formData: FormData) {
-  const by = await actor();
+  const by = await actorWith("pricing.edit");
   const returnTo = String(formData.get("returnTo") ?? "");
   const back = returnTo.startsWith("/admin/pricing/quantity") && !returnTo.startsWith("//") ? returnTo : "/admin/pricing/quantity";
   const ok = by && (await repositories.quantityRules.setStatus(String(formData.get("id") ?? ""), status(formData.get("status")), by)).ok;

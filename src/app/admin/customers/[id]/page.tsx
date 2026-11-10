@@ -1,7 +1,9 @@
+import { AllowedLink, Can, WriteGuard } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AddressBook } from "@/components/admin/customers/address-book";
+import { DeleteCustomerButton } from "@/components/admin/customers/delete-customer";
 import { CustomerStatusPanel } from "@/components/admin/customers/status-panel";
 import { ActionNotice, DemoEditingNotice, MockPermissionNote } from "@/components/admin/demo-notice";
 import { AccountStatusBadge, OrderStatusBadge, PaymentStatusBadge } from "@/components/ui/badge";
@@ -12,6 +14,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { Table } from "@/components/ui/table";
 import { accountStatusLabels } from "@/lib/customers/status";
 import { repositories } from "@/lib/data";
+import { allPages } from "@/lib/data/all-pages";
 import { formatDate, formatDateTime, formatFileSize, formatMoney, formatNumber } from "@/lib/format";
 import { DOCUMENT_KINDS } from "@/lib/validation/documents";
 
@@ -26,9 +29,9 @@ export default async function AdminCustomerPage({ params, searchParams }: PagePr
   if (!customer) notFound();
   const [orders, routes] = await Promise.all([
     repositories.orders.list({ customerId: id, perPage: 8 }),
-    repositories.delivery.listRoutes({ perPage: 48 }),
+    allPages((page, perPage) => repositories.delivery.listRoutes({ page, perPage })),
   ]);
-  const route = routes.items.find((r) => r.id === customer.deliveryRouteId);
+  const route = routes.find((r) => r.id === customer.deliveryRouteId);
   const notice = typeof sp.notice === "string" ? sp.notice : undefined;
   const missing = [
     !customer.contactName && "contact person",
@@ -54,7 +57,8 @@ export default async function AdminCustomerPage({ params, searchParams }: PagePr
         actions={
           <>
             <AccountStatusBadge status={customer.status} />
-            <ButtonLink href={`/admin/customers/${customer.id}/edit`} variant="secondary">Edit details</ButtonLink>
+            {customer.orderCount === 0 && <Can cap="customers.delete"><DeleteCustomerButton customerId={customer.id} name={customer.companyName} /></Can>}
+            <Can cap="customers.edit"><ButtonLink href={`/admin/customers/${customer.id}/edit`} variant="secondary">Edit details</ButtonLink></Can>
           </>
         }
       />
@@ -62,7 +66,7 @@ export default async function AdminCustomerPage({ params, searchParams }: PagePr
       {missing.length > 0 && (
         <p className="mb-4 rounded-ui border border-line bg-surface-muted px-3 py-2 text-sm">
           Details to complete: {missing.join(", ")}.{" "}
-          <Link href={`/admin/customers/${customer.id}/edit`} className="font-medium text-brand hover:underline">Edit details</Link>
+          <AllowedLink href={`/admin/customers/${customer.id}/edit`} className="font-medium text-brand hover:underline">Edit details</AllowedLink>
         </p>
       )}
 
@@ -76,16 +80,16 @@ export default async function AdminCustomerPage({ params, searchParams }: PagePr
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0 space-y-6">
           <Card title="Addresses" description="Delivery and billing addresses. Orders keep their own copy, so edits don't change past orders.">
-            <AddressBook
+            <WriteGuard cap="customers.edit"><AddressBook
               customerId={customer.id}
               addresses={customer.addresses}
               defaults={{ companyName: customer.companyName, recipientName: customer.contactName ?? "", phone: customer.phone ?? "" }}
-            />
+            /></WriteGuard>
           </Card>
 
           <Card
             title="Orders"
-            actions={customer.orderCount > 0 ? <Link href={`/admin/orders?customer=${customer.id}`} className="text-sm font-medium text-brand hover:underline">View all</Link> : undefined}
+            actions={customer.orderCount > 0 ? <AllowedLink href={`/admin/orders?customer=${customer.id}`} className="text-sm font-medium text-brand hover:underline">View all</AllowedLink> : undefined}
           >
             {orders.items.length ? (
               <Table caption="Recent orders" density="compact">
@@ -101,7 +105,7 @@ export default async function AdminCustomerPage({ params, searchParams }: PagePr
                 <tbody>
                   {orders.items.map((o) => (
                     <tr key={o.id}>
-                      <td><Link href={`/admin/orders/${o.id}`} className="font-medium text-brand hover:underline">{o.number}</Link></td>
+                      <td><AllowedLink href={`/admin/orders/${o.id}`} className="font-medium text-brand hover:underline">{o.number}</AllowedLink></td>
                       <td className="whitespace-nowrap">{formatDate(o.placedAt)}</td>
                       <td><OrderStatusBadge status={o.status} /></td>
                       <td><PaymentStatusBadge status={o.paymentStatus} /></td>
@@ -114,7 +118,7 @@ export default async function AdminCustomerPage({ params, searchParams }: PagePr
               <EmptyState
                 title="No orders yet"
                 description={customer.status === "approved" ? "Create the first order on the customer's behalf." : "Orders can be created once the customer is approved."}
-                action={customer.status === "approved" ? <ButtonLink href="/admin/orders/new" variant="secondary">New order</ButtonLink> : undefined}
+                action={customer.status === "approved" ? <Can cap="orders_create.create"><ButtonLink href="/admin/orders/new" variant="secondary">New order</ButtonLink></Can> : undefined}
               />
             )}
           </Card>
@@ -137,9 +141,9 @@ export default async function AdminCustomerPage({ params, searchParams }: PagePr
 
         <div className="min-w-0 space-y-6">
           <Card title="Approval">
-            <CustomerStatusPanel customerId={customer.id} companyName={customer.companyName} status={customer.status} />
+            <Can cap="customer_approval.approve"><CustomerStatusPanel customerId={customer.id} companyName={customer.companyName} status={customer.status} /></Can>
             <div className="mt-3">
-              <MockPermissionNote permission="customers.approve" />
+              <MockPermissionNote permission="customer_approval.approve" />
             </div>
           </Card>
 
@@ -167,7 +171,7 @@ export default async function AdminCustomerPage({ params, searchParams }: PagePr
             )}
           </Card>
 
-          <Card title="Identity documents" description="Uploaded with the application. Staff only.">
+          <Can cap="customer_approval.view"><Card title="Identity documents" description="Uploaded with the application. Staff only.">
             {customer.documents?.length ? (
               <ul className="divide-y divide-line text-sm">
                 {customer.documents.map((d) => (
@@ -186,7 +190,7 @@ export default async function AdminCustomerPage({ params, searchParams }: PagePr
               <p className="text-sm text-muted">None uploaded.</p>
             )}
             <p className="mt-2 text-xs text-muted">Demo: files are kept in server memory only and are lost on restart.</p>
-          </Card>
+          </Card></Can>
 
           {customer.internalNote && (
             <Card title="Internal note">

@@ -1,11 +1,71 @@
 import type { TaxRates } from "@/lib/orders/calc";
+import type { reportBreakdowns, ReportSummary } from "@/lib/reports/aggregate";
+import type { DeliveryDate } from "@/lib/delivery/schedule";
+import type { Segments } from "@/lib/reminders/segment";
+import type { RuledQuote, ShippingGeneralSettings, ShippingRule, ShippingRuleInput } from "@/lib/shipping/rules";
 import type { PriceResolution, QuantityLimits, RuleConflict } from "@/lib/pricing/engine";
 import type { StockChange, StockChangeContext } from "@/lib/orders/stock";
-import type { ShippingItem, ShippingQuote } from "@/lib/shipping/engine";
+import type { ShippingItem } from "@/lib/shipping/engine";
 import type { TaxCalculation } from "@/lib/tax/engine";
 import type {
   AccountStatus,
   Actor,
+  AdminNotificationFeed,
+  CompanySettings,
+  CompanySettingsInput,
+  MediaItem,
+  MediaKind,
+  MediaUpdate,
+  MediaUpload,
+  BlogPost,
+  DateRange,
+  Role,
+  RoleInput,
+  StaffInput,
+  StaffMember,
+  EmailLog,
+  EmailLogStatus,
+  EmailSenderSettings,
+  EmailTemplate,
+  EmailTemplateInput,
+  EmailTemplateKey,
+  ReminderCampaign,
+  ReminderCampaignInput,
+  PickupLocation,
+  PickupLocationInput,
+  ShippingClassInput,
+  ShippingClassUsage,
+  Coupon,
+  CouponInput,
+  CouponListStatus,
+  CouponUsage,
+  AccountSummary,
+  CustomerDeliveryLocation,
+  CustomerProfileInput,
+  InvoiceListItem,
+  Quotation,
+  QuotationQuoteInput,
+  QuotationRequestInput,
+  QuotationStatus,
+  SavedList,
+  SavedListDetail,
+  SavedListLineInput,
+  InventoryRow,
+  BlogPostInput,
+  ContentPage,
+  ContentPageInput,
+  ContentStatus,
+  MenuLocation,
+  NavigationMenu,
+  NavigationMenuInput,
+  ResolvedMenuItem,
+  SiteContent,
+  SiteContentInput,
+  TermKind,
+  TermUsage,
+  BlogPostSummary,
+  ContactMessage,
+  ContactMessageInput,
   Cart,
   CartLineInput,
   QuickOrderPage,
@@ -21,6 +81,8 @@ import type {
   AttributeValue,
   Brand,
   BrandFacet,
+  BrandInput,
+  AdminBrandRow,
   Category,
   CategoryInput,
   CategoryStatus,
@@ -89,7 +151,6 @@ import type {
   TaxRateInput,
   TaxSettings,
   TaxSettingsInput,
-  StoreSettingsInput,
   ShippingClass,
   StockMovement,
   StockStatus,
@@ -142,6 +203,8 @@ export interface ProductListQuery extends ListQuery<ProductSortField> {
   /** Restrict to these product ids (e.g. the result of a customer price-range lookup). */
   productIds?: ID[];
   stockStatus?: StockStatus;
+  /** Only products flagged as featured. */
+  featured?: boolean;
 }
 
 export interface AdminProductListQuery extends ProductListQuery {
@@ -155,6 +218,11 @@ export interface AdminProductListQuery extends ProductListQuery {
   pricing?: "missing" | "set";
 }
 
+export interface InventoryQuery extends PageQuery {
+  search?: string;
+  stockStatus?: StockStatus;
+}
+
 export interface ProductRepository {
   /** Public catalog: published + visible products only, never prices. Sortable by name or updated. */
   list(query?: ProductListQuery): Promise<Paginated<ProductSummary>>;
@@ -163,6 +231,8 @@ export interface ProductRepository {
   listCategories(): Promise<Category[]>;
   /** Brands used by publicly listed products, with counts (shop filter). */
   listBrands(): Promise<BrandFacet[]>;
+  /** Brands chosen for the homepage, in display order. productCount says whether a link to the shop would find anything. */
+  featuredBrands(max: number): Promise<BrandFacet[]>;
 
   /** Admin catalog rows, any status, with prices. */
   adminList(query?: AdminProductListQuery): Promise<Paginated<AdminProductRow>>;
@@ -181,6 +251,11 @@ export interface ProductRepository {
    * Never changes existing orders. Recorded in the stock movement history.
    */
   setStock(id: ID, variationId: ID | undefined, change: StockChange, context: StockChangeContext): Promise<SaveResult<Product>>;
+  /** Every stockable line (simple products and options), excluding archived products. */
+  inventory(query?: InventoryQuery): Promise<Paginated<InventoryRow>>;
+  inventoryCounts(): Promise<{ total: number; low: number; out: number }>;
+  /** Stock changes across all products, newest first. */
+  allStockMovements(query?: ListQuery<never> & DateBounds): Promise<Paginated<StockMovement & { productName: string }>>;
   /** Stock change history of a product (all its options), newest first. */
   stockMovements(id: ID, query?: PageQuery): Promise<Paginated<StockMovement>>;
   /** Small server-side search for pickers (never the full catalog). Excludes archived products. */
@@ -212,6 +287,12 @@ export interface CategoryRepository {
 
 // --- Catalog settings (taxonomies and classes used by the product form) --------
 
+export type BrandSortField = "name" | "products" | "order";
+
+export interface BrandListQuery extends ListQuery<BrandSortField> {
+  showOnHome?: boolean;
+}
+
 export interface CatalogSettingsRepository {
   brands(): Promise<Brand[]>;
   /** Most used first (for "most used tags" suggestions). */
@@ -219,6 +300,15 @@ export interface CatalogSettingsRepository {
   /** Store-wide defaults shown as placeholders in the product form. */
   storeDefaults(): Promise<{ lowStockThreshold: number }>;
   createBrand(name: string): Promise<SaveResult<Brand>>;
+  /** Admin brand list, with logos and product counts. */
+  adminBrands(query?: BrandListQuery): Promise<Paginated<AdminBrandRow>>;
+  /** Creates when id is null. */
+  saveBrand(id: ID | null, input: BrandInput): Promise<SaveResult<Brand>>;
+  /** Brands with the number of products carrying each. */
+  brandUsage(): Promise<TermUsage[]>;
+  renameBrand(from: string, name: string): Promise<SaveResult<Brand>>;
+  /** Removes it from the products that carry it. */
+  deleteBrand(name: string): Promise<SaveResult<{ name: string }>>;
   /** Adds a reusable value to a store-wide attribute. */
   createAttributeValue(attributeId: ID, name: string): Promise<SaveResult<AttributeValue>>;
   /** Store-wide reusable attributes with their values. */
@@ -300,6 +390,8 @@ export interface PricingRepository {
    * match. Customer-scoped (shop price filter); never exposed to guests.
    */
   productIdsInPriceRange(customerId: ID, range: { min?: Money; max?: Money }): Promise<ID[]>;
+  /** Lowest and highest price this (approved) customer can buy at, at quantity 1, for the shop's price slider; null if none. */
+  priceBounds(customerId: ID): Promise<{ min: Money; max: Money } | null>;
   listRules(query?: PriceRuleListQuery): Promise<Paginated<PriceRuleListItem>>;
   getRule(id: ID): Promise<PriceRuleListItem | null>;
   createRule(input: PriceRuleInput, actor: Actor): Promise<SaveResult<PriceRule>>;
@@ -331,6 +423,8 @@ export interface CustomerListQuery extends ListQuery<CustomerSortField>, DateBou
   prefecture?: string;
   /** true = has at least one non-cancelled order; false = none. */
   hasOrders?: boolean;
+  /** Pending customers come first, each part in the requested sort order. */
+  pendingFirst?: boolean;
 }
 
 export type GroupSortField = "name" | "customers";
@@ -366,11 +460,15 @@ export interface CustomerRepository {
   /** Quick add with essentials only; records the initial status in the history. */
   create(input: CustomerQuickInput, actor: Actor): Promise<SaveResult<Customer>>;
   update(id: ID, input: CustomerDetailsInput, actor: Actor): Promise<SaveResult<Customer>>;
+  /** The customer's own edit of their business and contact details. */
+  updateProfile(id: ID, input: CustomerProfileInput, actor: Actor): Promise<SaveResult<Customer>>;
   /** Approval workflow step; appends an AccountStatusEvent. Reason required for reject/suspend. */
   setStatus(id: ID, status: AccountStatus, reason: string | undefined, actor: Actor): Promise<SaveResult<Customer>>;
   /** Create (no id) or update an address; keeps one default per address type. */
   saveAddress(id: ID, input: AddressInput, actor: Actor): Promise<SaveResult<Customer>>;
   deleteAddress(id: ID, addressId: ID, actor: Actor): Promise<SaveResult<Customer>>;
+  /** Refused once the customer has an order: suspend them instead. */
+  remove(id: ID, actor: Actor): Promise<SaveResult<{ id: ID }>>;
   /** All groups, e.g. for filter options. */
   listGroups(): Promise<CustomerGroup[]>;
   /** Groups as a searchable, sortable listing with member counts. */
@@ -394,6 +492,8 @@ export interface OrderListQuery extends ListQuery<OrderSortField>, DateBounds {
   status?: OrderStatus;
   /** Leave out cancelled orders (matches dashboard and customer order counts). Ignored when `status` is set. */
   excludeCancelled?: boolean;
+  /** Only open orders (`isOpenOrder`). Ignored when `status` is set. */
+  open?: boolean;
   paymentStatus?: PaymentStatus;
   deliveryRouteId?: ID;
   orderType?: OrderType;
@@ -410,6 +510,8 @@ export interface OrderCalculationSettings {
 }
 
 export interface OrderRepository {
+  /** Refused unless the order is cancelled with no payment, refund or invoice. */
+  remove(id: ID, actor: Actor): Promise<SaveResult<{ id: ID }>>;
   /** `search` matches order number and customer name; dates filter on placement date. Rows carry `orderType`. */
   list(query?: OrderListQuery): Promise<Paginated<OrderListItem>>;
   /** Pass customerId to scope the lookup to that customer's own orders. */
@@ -450,6 +552,10 @@ export interface OrderRepository {
    * never paid). Empties the cart. The same `idempotencyKey` returns the order already placed (no duplicate).
    */
   checkout(customerId: ID, input: CheckoutInput): Promise<SaveResult<Order>>;
+  /** Totals for the customer dashboard. */
+  accountSummary(customerId: ID): Promise<AccountSummary>;
+  /** Every issued invoice document of a customer, newest first. */
+  listInvoices(query: { customerId: ID; search?: string; page?: number; perPage?: number }): Promise<Paginated<InvoiceListItem>>;
   /** What `checkout` would create, without saving (totals for the checkout page). */
   checkoutPreview(customerId: ID, input: Omit<CheckoutInput, "idempotencyKey">): Promise<SaveResult<CheckoutPreview>>;
   /**
@@ -483,6 +589,9 @@ export interface CartRepository {
    */
   quickOrder(customerId: ID | null, query?: QuickOrderQuery): Promise<QuickOrderPage>;
   remove(customerId: ID, lineId: string): Promise<SaveResult<Cart>>;
+  /** Saves a code on the cart if it applies now. It is re-checked on every read and at checkout. */
+  applyCoupon(customerId: ID, code: string): Promise<SaveResult<Cart>>;
+  removeCoupon(customerId: ID): Promise<SaveResult<Cart>>;
 }
 
 // --- Delivery and reminders ---------------------------------------------------
@@ -503,6 +612,14 @@ export interface ReminderListQuery extends ListQuery<ReminderSortField> {
 
 export interface DeliveryRepository {
   listRoutes(query?: RouteListQuery): Promise<Paginated<DeliveryRoute>>;
+  /** Each saved delivery address with its route and next delivery dates. */
+  forCustomer(customerId: ID): Promise<CustomerDeliveryLocation[]>;
+  getRoute(id: ID): Promise<DeliveryRoute | null>;
+  /** Next dates, eligible customers and open orders, for the schedule page. */
+  routeDetail(id: ID): Promise<DeliveryRouteDetail | null>;
+  saveRoute(id: ID | null, input: DeliveryRouteInput, actor: Actor): Promise<SaveResult<DeliveryRoute>>;
+  /** Refused while a reminder campaign uses it. */
+  deleteRoute(id: ID, actor: Actor): Promise<SaveResult<{ id: ID }>>;
   listReminders(query?: ReminderListQuery): Promise<Paginated<Reminder>>;
 }
 
@@ -522,7 +639,6 @@ export interface LocationRepository {
 
 export interface SettingsRepository {
   getStore(): Promise<StoreSettings>;
-  updateStore(input: StoreSettingsInput, actor: Actor): Promise<SaveResult<StoreSettings>>;
 }
 
 export type ZoneSortField = "match" | "name";
@@ -534,6 +650,12 @@ export interface ShippingZoneListItem extends ShippingZone {
 export interface ShippingQuoteInput {
   address: ShippingAddress;
   items: ShippingCartLine[];
+  couponCode?: string;
+  /** Tester only: use this group instead of the customer's. */
+  customerGroupId?: ID;
+  /** Tester only: use these numbers instead of the cart's. */
+  grams?: number;
+  subtotal?: number;
   /** Prices lines with this customer's rule/sale price when a line has no unitPrice. */
   customerId?: ID;
 }
@@ -548,7 +670,7 @@ export interface ShippingQuoteLine extends ShippingItem {
 
 /** DEMO calculation with sample rates; the backend must repeat it at cart, checkout and order creation. */
 export interface ShippingQuoteResult {
-  quote: ShippingQuote;
+  quote: RuledQuote;
   lines: ShippingQuoteLine[];
   /** Lines that could not be resolved (unknown product/variation or no price). */
   skipped: string[];
@@ -563,6 +685,22 @@ export interface ShippingRepository {
   /** The fallback zone cannot be deleted. */
   deleteZone(id: ID, actor: Actor): Promise<SaveResult<{ id: ID }>>;
   quote(input: ShippingQuoteInput): Promise<ShippingQuoteResult>;
+  listRules(): Promise<ShippingRule[]>;
+  getRule(id: ID): Promise<ShippingRule | null>;
+  saveRule(id: ID | null, input: ShippingRuleInput, actor: Actor): Promise<SaveResult<ShippingRule>>;
+  deleteRule(id: ID, actor: Actor): Promise<void>;
+  listClasses(): Promise<ShippingClassUsage[]>;
+  saveClass(id: ID | null, input: ShippingClassInput, actor: Actor): Promise<SaveResult<ShippingClassUsage>>;
+  /** Refused while products use the class. */
+  deleteClass(id: ID, actor: Actor): Promise<SaveResult<{ id: ID }>>;
+  listPickups(): Promise<PickupLocation[]>;
+  savePickup(id: ID | null, input: PickupLocationInput, actor: Actor): Promise<SaveResult<PickupLocation>>;
+  deletePickup(id: ID, actor: Actor): Promise<void>;
+  getGeneral(): Promise<ShippingGeneralSettings>;
+  updateGeneral(input: ShippingGeneralSettings, actor: Actor): Promise<void>;
+  setMethodEnabled(zoneId: ID, methodId: ID, enabled: boolean, actor: Actor): Promise<SaveResult<{ id: ID }>>;
+  /** Quotes a zone that isn't saved yet, for the guided setup. */
+  testDraftZone(zone: ShippingZoneInput, input: { address: ShippingAddress; grams: number; subtotal: number }): Promise<RuledQuote>;
 }
 
 // --- Tax ------------------------------------------------------------------------------
@@ -660,11 +798,242 @@ export interface PaymentSettingsRepository {
 }
 
 export interface AnalyticsRepository {
+  /** Reports screen figures; cancelled orders count only in the status report. */
+  report(range: DateRange): Promise<ReportData>;
   /** Admin dashboard figures for a date range, optionally compared with a second range. */
   getDashboard(query: DashboardQuery): Promise<DashboardSummary>;
 }
 
+// --- Journal (blog) --------------------------------------------------------------------
+
+export type ContentSortField = "updated" | "published" | "title";
+
+export interface ContentListQuery extends ListQuery<ContentSortField> {
+  /** Without a status, everything except the trash. */
+  status?: ContentStatus;
+}
+
+export interface PageRepository {
+  getLiveBySlug(slug: string): Promise<ContentPage | null>;
+  listLive(): Promise<ContentPage[]>;
+  adminList(query?: ContentListQuery): Promise<Paginated<ContentPage>>;
+  statusCounts(): Promise<Record<ContentStatus, number>>;
+  getById(id: ID): Promise<ContentPage | null>;
+  /** Creates when `id` is null. */
+  save(id: ID | null, input: ContentPageInput, actor: Actor): Promise<SaveResult<ContentPage>>;
+  trash(id: ID, actor: Actor): Promise<void>;
+  restore(id: ID, actor: Actor): Promise<void>;
+  /** Only from the trash. */
+  deleteForever(id: ID, actor: Actor): Promise<void>;
+}
+
+export interface PostRepository {
+  /** Live posts, newest first. */
+  list(query?: { excludeSlug?: string; limit?: number }): Promise<BlogPostSummary[]>;
+  getBySlug(slug: string): Promise<BlogPost | null>;
+  /** Public blog archive. */
+  /** `categories` matches a post in any of them. `category` is the older single form, still accepted. */
+  archive(query: { search?: string; category?: string; categories?: string[]; page?: number; perPage?: number }): Promise<Paginated<BlogPostSummary>>;
+  categories(): Promise<string[]>;
+  terms(kind: TermKind): Promise<TermUsage[]>;
+  /** Adds a term when `from` is null; otherwise renames it on every post. */
+  saveTerm(kind: TermKind, from: string | null, name: string): Promise<SaveResult<{ name: string }>>;
+  /** Removes it from every post. Refused if a published post would be left without a category. */
+  deleteTerm(kind: TermKind, name: string): Promise<SaveResult<{ name: string }>>;
+  adminList(query?: ContentListQuery & { category?: string }): Promise<Paginated<BlogPost>>;
+  statusCounts(): Promise<Record<ContentStatus, number>>;
+  getById(id: ID): Promise<BlogPost | null>;
+  /** Creates when `id` is null. */
+  save(id: ID | null, input: BlogPostInput, actor: Actor): Promise<SaveResult<BlogPost>>;
+  trash(id: ID, actor: Actor): Promise<void>;
+  restore(id: ID, actor: Actor): Promise<void>;
+  /** Only from the trash. */
+  deleteForever(id: ID, actor: Actor): Promise<void>;
+}
+
+export interface NavigationRepository {
+  list(): Promise<NavigationMenu[]>;
+  getById(id: ID): Promise<NavigationMenu | null>;
+  /** The menu at a location, ready to render. Links to pages that are not live are left out. */
+  resolved(location: Exclude<MenuLocation, "none">): Promise<ResolvedMenuItem[]>;
+  /** Creates when `id` is null. A location holds one menu, so taking one moves any other menu off it. */
+  save(id: ID | null, input: NavigationMenuInput, actor: Actor): Promise<SaveResult<NavigationMenu>>;
+  remove(id: ID, actor: Actor): Promise<void>;
+}
+
+export interface SiteContentRepository {
+  /** Homepage sections and About page content. */
+  get(): Promise<SiteContent>;
+  update(input: SiteContentInput, actor: Actor): Promise<SaveResult<SiteContent>>;
+}
+
+// --- Contact form ------------------------------------------------------------------------
+
+export interface ContactRepository {
+  /** Validates and stores a message. The backend also rate-limits it and emails the team; the demo sends nothing. */
+  submit(input: ContactMessageInput): Promise<SaveResult<ContactMessage>>;
+}
+
+// --- Admin notifications -------------------------------------------------------------------
+
+export interface AdminNotificationRepository {
+  /** New orders, registrations, stock alerts and contact messages, newest first, with the bell and sidebar counts. */
+  feed(query?: { limit?: number }): Promise<AdminNotificationFeed>;
+  markRead(id: ID): Promise<void>;
+  markAllRead(): Promise<void>;
+}
+
+// --- Company settings and media ---------------------------------------------------------------
+
+export interface CompanyRepository {
+  get(): Promise<CompanySettings>;
+  update(input: CompanySettingsInput, actor: Actor): Promise<SaveResult<CompanySettings>>;
+  /** Setup wizard: marks the first-time setup as finished. */
+  completeSetup(actor: Actor): Promise<CompanySettings>;
+  /** DEMO: back to the sample company. The backend does not need this. */
+  resetDemo(): Promise<CompanySettings>;
+}
+
+export type MediaSortField = "date" | "name" | "size";
+
+export interface MediaListQuery extends ListQuery<MediaSortField> {
+  kind?: MediaKind;
+}
+
+export interface MediaRepository {
+  list(query?: MediaListQuery): Promise<Paginated<MediaItem>>;
+  getById(id: ID): Promise<MediaItem | null>;
+  /** File contents and type for serving an uploaded file. */
+  content(id: ID): Promise<{ bytes: Uint8Array; contentType: string } | null>;
+  upload(input: MediaUpload, actor: Actor): Promise<SaveResult<MediaItem>>;
+  update(id: ID, input: MediaUpdate, actor: Actor): Promise<SaveResult<MediaItem>>;
+  remove(id: ID, actor: Actor): Promise<void>;
+}
+
+// --- Customer portal ----------------------------------------------------------------------
+
+export interface SavedListRepository {
+  list(customerId: ID): Promise<SavedList[]>;
+  /** With live product details and this customer's prices. */
+  get(customerId: ID, id: ID): Promise<SavedListDetail | null>;
+  create(customerId: ID, name: string, lines?: SavedListLineInput[]): Promise<SaveResult<SavedList>>;
+  createFromOrder(customerId: ID, orderId: ID, name?: string): Promise<SaveResult<SavedList>>;
+  rename(customerId: ID, id: ID, name: string): Promise<SaveResult<SavedList>>;
+  remove(customerId: ID, id: ID): Promise<void>;
+  /** The same product and option adds to the existing line. */
+  addItem(customerId: ID, id: ID, line: SavedListLineInput): Promise<SaveResult<SavedList>>;
+  setQuantity(customerId: ID, id: ID, itemId: ID, quantity: number): Promise<SaveResult<SavedList>>;
+  removeItem(customerId: ID, id: ID, itemId: ID): Promise<SaveResult<SavedList>>;
+  addToCart(customerId: ID, id: ID): Promise<SaveResult<{ added: number; skipped: string[] }>>;
+}
+
+export interface QuotationListQuery extends PageQuery {
+  /** Always set on the customer portal. */
+  customerId?: ID;
+  status?: QuotationStatus;
+  search?: string;
+}
+
+export interface QuotationRepository {
+  list(query?: QuotationListQuery): Promise<Paginated<Quotation>>;
+  counts(): Promise<{ requested: number }>;
+  /** Pass customerId to limit the lookup to that customer's own quotations. */
+  getById(id: ID, customerId?: ID): Promise<Quotation | null>;
+  request(customerId: ID, input: QuotationRequestInput): Promise<SaveResult<Quotation>>;
+  /** Staff price every line and set a validity date. */
+  sendQuote(id: ID, input: QuotationQuoteInput, actor: Actor): Promise<SaveResult<Quotation>>;
+  decline(id: ID, reason: string, actor: Actor): Promise<SaveResult<Quotation>>;
+  /** Accepting creates an order at the quoted prices. An expired quote can't be accepted. */
+  respond(customerId: ID, id: ID, answer: "accept" | "reject", actor: Actor): Promise<SaveResult<Quotation>>;
+}
+
+export interface CouponRepository {
+  list(query?: PageQuery & { search?: string; status?: CouponListStatus }): Promise<Paginated<Coupon>>;
+  getById(id: ID): Promise<Coupon | null>;
+  usage(id: ID, query?: PageQuery): Promise<Paginated<CouponUsage>>;
+  /** Creates when `id` is null. Codes are unique, compared in capitals. */
+  save(id: ID | null, input: CouponInput, actor: Actor): Promise<SaveResult<Coupon>>;
+  setEnabled(id: ID, enabled: boolean, actor: Actor): Promise<void>;
+  /** Past orders keep their own record of the code and amount. */
+  remove(id: ID, actor: Actor): Promise<void>;
+}
+
+export interface DeliveryRouteDetail {
+  upcoming: DeliveryDate[];
+  customers: { id: ID; name: string }[];
+  orders: { id: ID; number: string; customerName: string; status: OrderStatus; requestedDeliveryDate?: string }[];
+}
+
+export type DeliveryRouteInput = Pick<DeliveryRoute, "name" | "areas" | "deliveryDays" | "cutoffTime" | "excludedDates" | "extraDates" | "active">;
+
+export interface EmailRepository {
+  templates(): Promise<EmailTemplate[]>;
+  template(key: EmailTemplateKey): Promise<EmailTemplate | null>;
+  saveTemplate(key: EmailTemplateKey, input: EmailTemplateInput, actor: Actor): Promise<SaveResult<EmailTemplate>>;
+  resetTemplate(key: EmailTemplateKey, actor: Actor): Promise<void>;
+  /** Renders a saved template or an unsaved draft with sample values. */
+  preview(key: EmailTemplateKey, draft?: { subject: string; bodyHtml: string }): Promise<{ from: string; subject: string; bodyHtml: string; footer?: string }>;
+  sender(): Promise<EmailSenderSettings>;
+  saveSender(input: EmailSenderSettings, actor: Actor): Promise<SaveResult<EmailSenderSettings>>;
+  logs(query?: PageQuery & { search?: string; status?: EmailLogStatus; templateKey?: EmailTemplateKey }): Promise<Paginated<EmailLog>>;
+  retry(id: ID, actor: Actor): Promise<SaveResult<EmailLog>>;
+}
+
+export interface ReminderPreview {
+  campaign: ReminderCampaign;
+  route: DeliveryRoute;
+  next: DeliveryDate | null;
+  /** YYYY-MM-DD: when this reminder would go out. */
+  sendOn: string | null;
+  segments: Segments;
+  emails: { withOrder: { subject: string; bodyHtml: string }; withoutOrder: { subject: string; bodyHtml: string } } | null;
+}
+
+export interface ReminderRepository {
+  list(query?: PageQuery & { search?: string }): Promise<Paginated<ReminderCampaign>>;
+  getById(id: ID): Promise<ReminderCampaign | null>;
+  save(id: ID | null, input: ReminderCampaignInput, actor: Actor): Promise<SaveResult<ReminderCampaign>>;
+  remove(id: ID, actor: Actor): Promise<void>;
+  preview(id: ID): Promise<ReminderPreview | null>;
+  /** DEMO: writes what a run would send to the email log. Never sends. One per customer, campaign and date. */
+  simulate(id: ID, actor: Actor): Promise<SaveResult<{ created: number; skipped: number }>>;
+  history(id: ID, query?: PageQuery): Promise<Paginated<EmailLog>>;
+}
+
+export type ReportData = { summary: ReportSummary } & ReturnType<typeof reportBreakdowns>;
+
+export interface StaffRepository {
+  roles(): Promise<Role[]>;
+  role(id: ID): Promise<Role | null>;
+  /** Staff per role id. */
+  staffCounts(): Promise<Record<ID, number>>;
+  /** Creates when `id` is null. `actorCapabilities`: nobody can grant what they don't have themselves. */
+  saveRole(id: ID | null, input: RoleInput, actorCapabilities: string[]): Promise<SaveResult<Role>>;
+  duplicateRole(id: ID, actorCapabilities: string[]): Promise<SaveResult<Role>>;
+  /** Refused for built-in roles and roles in use. Administrator can't be renamed or lose permissions. */
+  deleteRole(id: ID): Promise<SaveResult<{ id: ID }>>;
+  staff(query?: PageQuery & { search?: string; roleId?: ID }): Promise<Paginated<StaffMember>>;
+  staffMember(id: ID): Promise<StaffMember | null>;
+  /** Refused if it would leave no active administrator. The action also refuses changing someone with more permissions than the actor. */
+  saveStaff(id: ID | null, input: StaffInput): Promise<SaveResult<StaffMember>>;
+  removeStaff(id: ID): Promise<SaveResult<{ id: ID }>>;
+}
+
 export interface Repositories {
+  staff: StaffRepository;
+  emails: EmailRepository;
+  reminders: ReminderRepository;
+  coupons: CouponRepository;
+  savedLists: SavedListRepository;
+  quotations: QuotationRepository;
+  company: CompanyRepository;
+  media: MediaRepository;
+  adminNotifications: AdminNotificationRepository;
+  contact: ContactRepository;
+  posts: PostRepository;
+  pages: PageRepository;
+  navigation: NavigationRepository;
+  siteContent: SiteContentRepository;
   products: ProductRepository;
   categories: CategoryRepository;
   catalogSettings: CatalogSettingsRepository;

@@ -11,7 +11,7 @@ import type { Kpi, LowStockItem, RankingItem, RecentOrderSummary } from "@/lib/t
 
 export function Panel({ title, action, className, children }: { title: string; action?: ReactNode; className?: string; children: ReactNode }) {
   return (
-    <section className={cx("rounded-ui border border-line bg-surface p-4 sm:p-5", className)}>
+    <section className={cx("min-w-0 rounded-ui border border-line bg-surface p-4 sm:p-5", className)}>
       <header className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold sm:text-lg">{title}</h2>
         {action}
@@ -21,7 +21,7 @@ export function Panel({ title, action, className, children }: { title: string; a
   );
 }
 
-export function PanelLink({ href, children }: { href: "/admin/orders" | "/admin/products" | "/admin/customers"; children: ReactNode }) {
+export function PanelLink({ href, children }: { href: Route; children: ReactNode }) {
   return (
     <Link href={href} className="text-sm font-medium text-brand hover:underline">
       {children}

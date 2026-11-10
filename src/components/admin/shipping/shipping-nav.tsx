@@ -1,10 +1,15 @@
+import { addressLabels } from "@/lib/locations";
 import Link from "next/link";
 import { cx } from "@/lib/cx";
 
 const items = [
-  { key: "zones", href: "/admin/shipping", label: "Shipping zones" },
-  { key: "preview", href: "/admin/shipping/preview", label: "Rate preview" },
-  { key: "routes", href: "/admin/delivery", label: "Delivery routes" },
+  { key: "zones", href: "/admin/shipping", label: "Zones" },
+  { key: "methods", href: "/admin/shipping/methods", label: "Methods" },
+  { key: "rules", href: "/admin/shipping/rules", label: "Conditional rules" },
+  { key: "classes", href: "/admin/shipping/classes", label: "Classes" },
+  { key: "pickup", href: "/admin/shipping/pickup", label: "Pickup locations" },
+  { key: "preview", href: "/admin/shipping/preview", label: "Calculator" },
+  { key: "settings", href: "/admin/shipping/settings", label: "Settings" },
 ] as const;
 
 export function ShippingNav({ current }: { current: (typeof items)[number]["key"] }) {
@@ -35,7 +40,7 @@ export function ShippingRules({ open = false }: { open?: boolean }) {
       <ol className="mt-3 list-decimal space-y-1 pl-5 text-muted">
         <li>A zone listing the address&apos;s <strong className="text-foreground">exact postcode</strong> wins.</li>
         <li>Otherwise a zone listing its <strong className="text-foreground">city</strong> (in that prefecture).</li>
-        <li>Otherwise a zone listing its <strong className="text-foreground">prefecture</strong>.</li>
+        <li>Otherwise a zone listing its <strong className="text-foreground">{addressLabels().region.toLowerCase()}</strong>.</li>
         <li>Otherwise the <strong className="text-foreground">fallback zone</strong>. A postcode, city or prefecture can be in one zone only, so each address gets exactly one zone.</li>
       </ol>
       <ul className="mt-3 list-disc space-y-1 pl-5 text-muted">

@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/ui/select";
 import { useRef, useState, useTransition } from "react";
 import { createAttributeValueAction } from "@/app/admin/products/actions";
 import { Badge } from "@/components/ui/badge";
@@ -204,10 +205,10 @@ export function AttributesEditor({ draft, update, errors, storeAttributes }: Sec
       <div className="flex flex-wrap items-end gap-2">
         <div>
           <label htmlFor="attribute-add" className="mb-1 block text-xs font-medium text-muted">Add attribute</label>
-          <select id="attribute-add" value={adding} onChange={(e) => setAdding(e.target.value)} className="h-9 rounded-ui border border-line bg-surface px-2 text-sm">
+          <Select id="attribute-add" value={adding} onChange={(e) => setAdding(e.target.value)} className="h-9 w-auto min-w-52">
             <option value="">Custom (this product only)</option>
             {available.map((a) => <option key={a.id} value={a.id}>{a.name} (store attribute)</option>)}
-          </select>
+          </Select>
         </div>
         <Button variant="secondary" size="sm" className="h-9" onClick={add}>
           <Icon name="plus" className="size-4" /> Add

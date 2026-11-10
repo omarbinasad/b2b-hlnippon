@@ -19,6 +19,7 @@ const messages: Record<string, { tone: "info" | "warning"; text: string }> = {
   archived: { tone: "info", text: "Archived. It is hidden from the store; filter by status “Archived” to find it." },
   restored: { tone: "info", text: "Restored as a draft." },
   deleted: { tone: "info", text: "Deleted from the demo store." },
+  "customer-deleted": { tone: "info", text: "Customer deleted from the demo store." },
   "payment-incomplete": { tone: "warning", text: "That method could not be enabled: complete its details first (Edit)." },
   status: { tone: "info", text: "Order status updated in the demo store. No message was sent to the customer." },
   error: { tone: "warning", text: "That action could not be completed. The item may no longer exist." },

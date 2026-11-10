@@ -35,7 +35,7 @@ export default async function EditZonePage({ params }: PageProps<"/admin/shippin
         actions={zone.isFallback ? <Badge tone="info">Fallback zone</Badge> : undefined}
       />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-        <ZoneForm zone={zone} others={zones.items.filter((z) => z.id !== zone.id)} classes={classes} />
+        <ZoneForm pickups={await repositories.shipping.listPickups()} zone={zone} others={zones.items.filter((z) => z.id !== zone.id)} classes={classes} />
         <aside className="space-y-4">
           <p className="text-sm">
             Check the result for an address and cart in the{" "}

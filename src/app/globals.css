@@ -23,6 +23,10 @@
   --foreground: #121a17;
   --muted: #5a6964;
   --line: #e1e7e4;
+  --panel-warm: #fbf9f5;
+  --panel-warm-line: #efdcb9;
+  --logo-tile: #ffffff;
+  --logo-tile-ink: #121a17;
 
   --sidebar: #0d4a36;
   --sidebar-foreground: #cfe3d9;
@@ -58,6 +62,25 @@
   --hero-muted: rgb(255 255 255 / 0.8);
   --hero-accent: #8ff0c4;
   --hero-tile: rgb(255 255 255 / 0.1);
+  /* Hero card: glass over a photo, the same in both themes (not redefined for dark). */
+  --hero-glass: rgb(255 255 255 / 0.42);
+  --hero-glass-line: rgb(255 255 255 / 0.6);
+  --hero-glass-ink: #141414;
+  --hero-glass-muted: #26292a;
+  --hero-badge-from: #13a862;
+  --hero-badge-to: #0b6e42;
+  --hero-cta-from: #f5801f;
+  --hero-cta-to: #d4520a;
+  /* Home "how it works" steps: badges keep these colours in both themes. */
+  --step-1-badge: #0e98a4;
+  --step-2-badge: #146a4b;
+  --step-3-badge: #b8790e;
+  --step-4-badge: #a3223a;
+  --step-1: #0b7f8a;
+  --step-2: #146a4b;
+  --step-3: #a1690b;
+  --step-4: #9b2035;
+  --step-ring: #eef1f0;
 
   --focus: #2563eb;
   --radius: 0.75rem;
@@ -76,6 +99,10 @@
   --foreground: #e6efeb;
   --muted: #93a69f;
   --line: #20322c;
+  --panel-warm: #101c18;
+  --panel-warm-line: #3d3a28;
+  --logo-tile: #ffffff;
+  --logo-tile-ink: #121a17;
 
   --sidebar: #0c1714;
   --sidebar-foreground: #a9bdb5;
@@ -108,6 +135,11 @@
   --hero-muted: rgb(242 251 247 / 0.78);
   --hero-accent: #6ee7b7;
   --hero-tile: rgb(255 255 255 / 0.08);
+  --step-1: #3cc7d2;
+  --step-2: #4cc28f;
+  --step-3: #e6ac45;
+  --step-4: #f07186;
+  --step-ring: #15241f;
 
   --focus: #60a5fa;
   color-scheme: dark;
@@ -129,6 +161,10 @@
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-line: var(--line);
+  --color-panel-warm: var(--panel-warm);
+  --color-panel-warm-line: var(--panel-warm-line);
+  --color-logo-tile: var(--logo-tile);
+  --color-logo-tile-ink: var(--logo-tile-ink);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-active: var(--sidebar-active);
@@ -145,13 +181,30 @@
   --color-cta-from: var(--cta-from);
   --color-cta-to: var(--cta-to);
   --color-hero-from: var(--hero-from);
+  --color-hero-glass: var(--hero-glass);
+  --color-hero-glass-line: var(--hero-glass-line);
+  --color-hero-glass-ink: var(--hero-glass-ink);
+  --color-hero-glass-muted: var(--hero-glass-muted);
+  --color-hero-badge-from: var(--hero-badge-from);
+  --color-hero-badge-to: var(--hero-badge-to);
+  --color-hero-cta-from: var(--hero-cta-from);
+  --color-hero-cta-to: var(--hero-cta-to);
+  --color-step-1: var(--step-1);
+  --color-step-1-badge: var(--step-1-badge);
+  --color-step-2: var(--step-2);
+  --color-step-2-badge: var(--step-2-badge);
+  --color-step-3: var(--step-3);
+  --color-step-3-badge: var(--step-3-badge);
+  --color-step-4: var(--step-4);
+  --color-step-4-badge: var(--step-4-badge);
+  --color-step-ring: var(--step-ring);
   --color-hero-to: var(--hero-to);
   --color-hero-text: var(--hero-text);
   --color-hero-muted: var(--hero-muted);
   --color-hero-accent: var(--hero-accent);
   --color-hero-tile: var(--hero-tile);
   --radius-ui: var(--radius);
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, "Noto Sans Bengali", sans-serif;
+  --font-sans: var(--font-body, var(--font-inter)), ui-sans-serif, system-ui, "Noto Sans Bengali", sans-serif;
 }
 
 body {
@@ -159,10 +212,199 @@ body {
   color: var(--foreground);
 }
 
-/* Consistent, clearly visible keyboard focus everywhere. */
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+/* Heading font from Company & Branding; the same as the body font by default. */
+@layer base {
+  h1, h2, h3, h4 { font-family: var(--font-heading, inherit); }
+}
+
+/* Consistent, clearly visible keyboard focus everywhere. In the base layer so utilities (form fields use a brand ring) can override it. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+}
+
+/*
+  Hand cursor on everything clickable. Tailwind's reset leaves buttons on the arrow, and links already get the hand from the browser.
+  :where() keeps specificity at zero, so the disabled rule below and any utility (such as cursor-grab on drag handles) win.
+*/
+@layer base {
+  :where(
+    button,
+    summary,
+    input:is([type="button"], [type="submit"], [type="reset"], [type="checkbox"], [type="radio"], [type="file"], [type="color"], [type="range"]),
+    label:has(input:is([type="checkbox"], [type="radio"], [type="file"])),
+    [role="button"], [role="link"], [role="tab"], [role="menuitem"], [role="option"], [role="switch"], [role="checkbox"], [role="radio"]
+  ) {
+    cursor: pointer;
+  }
+  ::file-selector-button {
+    cursor: pointer;
+  }
+  /* Important so a hard-coded cursor-pointer on a control can't show the hand while it's disabled. */
+  :disabled,
+  [aria-disabled="true"],
+  label:has(input:disabled) {
+    cursor: not-allowed !important;
+  }
+}
+
+/* Very thin scrollbar for menus and dropdown lists: no arrows, and only a small thumb. */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: var(--line);
+}
+.scrollbar-thin:hover::-webkit-scrollbar-thumb {
+  background: var(--muted);
+}
+@supports not selector(::-webkit-scrollbar) {
+  .scrollbar-thin {
+    scrollbar-color: var(--line) transparent;
+    scrollbar-width: thin;
+  }
+}
+
+/* Shop price slider: two range inputs on one track; only the handles take the pointer. */
+.price-range input[type="range"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+}
+.price-range input[type="range"]::-webkit-slider-thumb {
+  width: 1.25rem;
+  height: 1.25rem;
+  appearance: none;
+  border: 3px solid var(--brand);
+  border-radius: 9999px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  cursor: grab;
+  pointer-events: auto;
+}
+.price-range input[type="range"]::-moz-range-thumb {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 3px solid var(--brand);
+  border-radius: 9999px;
+  background: var(--surface);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
+  cursor: grab;
+  pointer-events: auto;
+}
+
+/*
+  Preloader (src/components/ui/navigation-progress.tsx). A thin bar; after a moment the page dims; if it's still loading, a
+  small spinner. The delays keep a fast navigation from flashing. Nothing here affects layout or takes clicks.
+*/
+.nav-progress {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 60;
+  height: 3px;
+  border-radius: 0 9999px 9999px 0;
+  background: var(--brand);
+  box-shadow: 0 0 8px var(--brand);
+  pointer-events: none;
+  transform: scaleX(0);
+  transform-origin: left;
+  /* Creeps towards the end, then gets out of the way if nothing ever ends it. */
+  animation: nav-grow 8s cubic-bezier(0.1, 0.7, 0.2, 1) forwards, nav-hide 0.3s 12s forwards;
+}
+html[data-nav="loading"] .nav-progress,
+html[data-nav="skeleton"] .nav-progress {
+  animation: nav-grow-again 8s cubic-bezier(0.1, 0.7, 0.2, 1) forwards, nav-hide 0.3s 12s forwards;
+}
+html[data-nav="done"] .nav-progress {
+  animation: none;
+  opacity: 0;
+  transform: scaleX(1);
+  transition: transform 0.2s ease-out, opacity 0.25s ease-out 0.2s;
+}
+@keyframes nav-grow {
+  from { transform: scaleX(0.08); }
+  to { transform: scaleX(0.9); }
+}
+/* The same, under another name: an animation only restarts when its name changes. */
+@keyframes nav-grow-again {
+  from { transform: scaleX(0.08); }
+  to { transform: scaleX(0.9); }
+}
+@keyframes nav-hide {
+  to { opacity: 0; }
+}
+#main {
+  transition: opacity 0.2s ease-out;
+}
+html[data-nav="loading"] #main {
+  opacity: 0.55;
+  transition: opacity 0.2s ease-out 0.15s;
+}
+/* A skeleton already says it's loading: lighter, no spinner, and the page still fades in when it arrives. */
+html[data-nav="skeleton"] #main {
+  opacity: 0.75;
+  transition: opacity 0.2s ease-out 0.15s;
+}
+.nav-spinner {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 60;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin: -1.25rem 0 0 -1.25rem;
+  border: 3px solid var(--line);
+  border-top-color: var(--brand);
+  border-radius: 9999px;
+  background: var(--surface);
+  box-shadow: 0 2px 10px rgb(0 0 0 / 0.15);
+  opacity: 0;
+  pointer-events: none;
+}
+html[data-nav="loading"] .nav-spinner {
+  opacity: 1;
+  transition: opacity 0.2s ease-out 0.4s;
+  animation: nav-spin 0.8s linear infinite;
+}
+@keyframes nav-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-progress,
+  html[data-nav="loading"] .nav-progress,
+  html[data-nav="skeleton"] .nav-progress {
+    animation: nav-hide 0.3s 12s forwards;
+    transform: scaleX(0.6);
+  }
+  html[data-nav="done"] .nav-progress {
+    transition: none;
+  }
+  html[data-nav="loading"] .nav-spinner {
+    animation: none;
+  }
+  #main,
+  html[data-nav="loading"] #main,
+  html[data-nav="skeleton"] #main {
+    transition: none;
+  }
+}
+@media print {
+  .nav-progress,
+  .nav-spinner {
+    display: none;
+  }
 }
 
 /* Hide horizontal scrollbar on nav strips while keeping them scrollable. */
@@ -181,6 +423,14 @@ body {
   }
   to {
     transform: translateX(0);
+  }
+}
+
+/* The phone menu (mobile-bottom-nav.tsx): page content and floating buttons stay clear of it. */
+@media (width < 48rem) {
+  body:has([data-bottom-nav]) {
+    --bottom-nav-h: calc(3.75rem + env(safe-area-inset-bottom));
+    padding-bottom: var(--bottom-nav-h);
   }
 }
 

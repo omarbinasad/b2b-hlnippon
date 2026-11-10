@@ -4,7 +4,7 @@
  */
 import type { BackorderPolicy, CartLineInput, ID, PaymentMethod, PaymentMethodId, StockInfo } from "../types/index.ts";
 
-export const CART_LIMITS = { lines: 100, quantity: 100_000, note: 500 } as const;
+export const CART_LIMITS = { lines: 100, quantity: 10_000, note: 500 } as const;
 
 export const cartLineId = (productId: ID, variationId?: ID) => `${productId}:${variationId ?? ""}`;
 

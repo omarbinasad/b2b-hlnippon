@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SaveOrderAsList } from "@/components/account/saved-list-editor";
 import { ReorderButton } from "@/components/order/reorder-button";
 import { AddressBlock, OrderItemsTable, OrderTotalsList, StatusProgress } from "@/components/order/order-details";
 import { OrderStatusBadge, PaymentStatusBadge } from "@/components/ui/badge";
@@ -41,6 +42,7 @@ export default async function AccountOrderPage({ params, searchParams }: PagePro
                 Invoice {order.invoices.at(-1)!.number}
               </Link>
             ) : null}
+            <SaveOrderAsList orderId={order.id} />
             <ReorderButton orderId={order.id} />
           </>
         }

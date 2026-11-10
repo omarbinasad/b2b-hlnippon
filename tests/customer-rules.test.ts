@@ -1,5 +1,6 @@
 /** Customer approval workflow and contact-format rules. Run with `npm test`. */
 import assert from "node:assert/strict";
+import { validateNewPassword } from "../src/lib/validation/password.ts";
 import { describe, it } from "node:test";
 import { isJpPhone, isEmail, isPostcode } from "../src/lib/customers/contact.ts";
 import { checkStatusChange, statusActions } from "../src/lib/customers/status.ts";
@@ -44,5 +45,13 @@ describe("contact formats", () => {
     assert.ok(!isPostcode("16-00023"));
     assert.ok(isEmail("buyer@customer.example.com"));
     assert.ok(!isEmail("buyer@"));
+  });
+});
+
+describe("new password", () => {
+  it("needs a minimum length and a matching confirmation", () => {
+    assert.ok(validateNewPassword("short", "short").password);
+    assert.ok(validateNewPassword("longenough", "different").confirm);
+    assert.deepEqual(validateNewPassword("longenough", "longenough"), {});
   });
 });

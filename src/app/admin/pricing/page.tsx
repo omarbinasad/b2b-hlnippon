@@ -1,3 +1,4 @@
+import { Can } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ActionNotice, DemoEditingNotice, MockPermissionNote } from "@/components/admin/demo-notice";
@@ -62,9 +63,9 @@ export default async function PricingRulesPage({ searchParams }: PageProps<"/adm
         title="Pricing & quantity rules"
         description="B2B prices for customers and groups, bulk tiers, and per-line quantity limits."
         actions={
-          <ButtonLink href="/admin/pricing/new">
+          <Can cap="pricing.create"><ButtonLink href="/admin/pricing/new">
             <Icon name="plus" className="size-4" /> New pricing rule
-          </ButtonLink>
+          </ButtonLink></Can>
         }
       />
       <RulesNav current="price" />
@@ -153,7 +154,7 @@ export default async function PricingRulesPage({ searchParams }: PageProps<"/adm
           Default order follows precedence (customer → group → all; then target and priority). Overlap = another enabled rule for the same customers, products, dates
           and quantities, decided by priority; conflict = same priority, decided by age.
         </p>
-        <MockPermissionNote permission="pricing.manage" />
+        <MockPermissionNote permission="pricing.edit" />
         <DemoEditingNotice />
       </div>
     </>

@@ -1,5 +1,6 @@
 "use client";
 
+import { addressLabels, regionNames } from "@/lib/locations";
 import { useState, useTransition } from "react";
 import { getOrderCustomerAction } from "@/app/admin/orders/actions";
 import { productOptionAction } from "@/app/admin/pricing/actions";
@@ -15,9 +16,9 @@ import { Table } from "@/components/ui/table";
 import { siteConfig } from "@/config/site";
 import type { RuleProductOption, TaxPreviewResult } from "@/lib/data/repositories";
 import { formatMoney, humanize } from "@/lib/format";
-import { JP_PREFECTURES } from "@/lib/locations";
+import { RegionField } from "@/components/ui/region-field";
 import type { OrderCustomerContext } from "@/lib/types";
-import { AMOUNT_STEP } from "@/lib/orders/calc";
+import { amountStep } from "@/lib/orders/calc";
 
 interface CartLine {
   key: string;
@@ -40,7 +41,7 @@ const priceSourceText = { given: "entered", rule: "B2B rule", sale: "sale price"
 export function TaxPreview({ examples }: { examples: TaxPreviewExample[] }) {
   const [customer, setCustomer] = useState<OrderCustomerContext | null>(null);
   const [customerId, setCustomerId] = useState<string | undefined>();
-  const [address, setAddress] = useState({ prefecture: "Tokyo", city: "Shinjuku-ku", postalCode: "" });
+  const [address, setAddress] = useState({ prefecture: regionNames()[0] ?? "", city: "", postalCode: "" });
   const [lines, setLines] = useState<CartLine[]>([]);
   const [shippingMethodId, setShippingMethodId] = useState("auto");
   const [result, setResult] = useState<TaxPreviewResult | null>(null);
@@ -125,16 +126,14 @@ export function TaxPreview({ examples }: { examples: TaxPreviewExample[] }) {
               />
             )}
             <p className="text-xs text-muted">Without a customer, catalog (sale or regular) prices are used. Address can be entered by hand.</p>
-            <Field id="tx-prefecture" label="Prefecture">
-              <Select id="tx-prefecture" value={address.prefecture} onChange={(e) => setAddress({ ...address, prefecture: e.target.value })}>
-                {JP_PREFECTURES.map((d) => <option key={d} value={d}>{d}</option>)}
-              </Select>
+            <Field id="tx-prefecture" label={addressLabels().region}>
+              <RegionField id="tx-prefecture" value={address.prefecture} onChange={(e) => setAddress({ ...address, prefecture: e.target.value })} />
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field id="tx-city" label="City">
                 <Input id="tx-city" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} />
               </Field>
-              <Field id="tx-postcode" label="Postcode">
+              <Field id="tx-postcode" label={addressLabels().postcode}>
                 <Input id="tx-postcode" inputMode="numeric" maxLength={4} value={address.postalCode} onChange={(e) => setAddress({ ...address, postalCode: e.target.value.replace(/\D/g, "") })} />
               </Field>
             </div>
@@ -158,7 +157,7 @@ export function TaxPreview({ examples }: { examples: TaxPreviewExample[] }) {
                     </Select>
                   )}
                   <Input aria-label={`${l.product.name} quantity`} type="number" inputMode="numeric" min={1} value={l.quantity} onChange={(e) => setLines((ls) => ls.map((x) => (x.key === l.key ? { ...x, quantity: e.target.value } : x)))} className="w-20" />
-                  <Input aria-label={`${l.product.name} line discount (${siteConfig.currencySymbol})`} type="number" inputMode="decimal" min={0} step={AMOUNT_STEP} placeholder={`Discount ${siteConfig.currencySymbol}`} value={l.discount} onChange={(e) => setLines((ls) => ls.map((x) => (x.key === l.key ? { ...x, discount: e.target.value } : x)))} className="w-32" />
+                  <Input aria-label={`${l.product.name} line discount (${siteConfig.currencySymbol})`} type="number" inputMode="decimal" min={0} step={amountStep()} placeholder={`Discount ${siteConfig.currencySymbol}`} value={l.discount} onChange={(e) => setLines((ls) => ls.map((x) => (x.key === l.key ? { ...x, discount: e.target.value } : x)))} className="w-32" />
                 </div>
               </div>
             ))}

@@ -1,8 +1,10 @@
 import { Skeleton } from "@/components/ui/feedback";
+import { LoadingMark } from "@/components/ui/navigation-progress";
 
 export default function AdminLoading() {
   return (
     <div role="status" aria-label="Loading">
+      <LoadingMark />
       <Skeleton className="h-9 w-48" />
       <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, i) => (

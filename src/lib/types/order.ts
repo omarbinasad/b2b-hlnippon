@@ -1,4 +1,5 @@
 import type { LegacyRef, ProductType, StockInfo, TaxClass } from "./catalog";
+import type { OrderCoupon } from "./coupon";
 import type { ID, ISODateString, Money, Weight } from "./common";
 import type { Address } from "./customer";
 import type { ShippingDecision } from "./shipping";
@@ -136,6 +137,8 @@ export interface PaymentDetails {
  */
 export interface Refund {
   id: ID;
+  /** Absent = "manual". */
+  method?: RefundMethod;
   /** Absent = "order". */
   kind?: RefundKind;
   amount: Money;
@@ -172,8 +175,13 @@ export interface RefundRestock {
 }
 
 /** Admin input for a refund. The refund amount = line amounts + shipping + `other`. */
+/** "manual": staff pay it back themselves and record it here. "gateway": through the payment provider (backend). */
+export type RefundMethod = "manual" | "gateway";
+
 export interface RefundInput {
   kind: RefundKind;
+  /** Absent = "manual". */
+  method?: RefundMethod;
   lines: { orderItemId: ID; quantity: number; amount: Money }[];
   shipping: Money;
   /** An amount not tied to an item or shipping (e.g. goodwill, or the overpaid amount). */
@@ -310,6 +318,8 @@ export interface Order extends LegacyRef {
   taxSnapshot?: OrderTaxSnapshot;
   refunds: Refund[];
   notes: OrderNote[];
+  /** Coupon the customer used. Its amount is shared across the lines' discounts; apart from the staff order discount. */
+  coupon?: OrderCoupon;
   /** Order-level discount, if any (the amount is `totals.orderDiscount`). */
   discount?: OrderDiscount;
   adjustments: OrderAdjustment[];
@@ -340,11 +350,14 @@ export interface CreateOrderInput {
   billingAddress?: OrderAddressInput;
   shippingAddress?: OrderAddressInput;
   items: { productId: ID; variationId?: ID; quantity: number; unitPrice: Money; discount: Money }[];
-  shipping: { label: string; amount: Money; mode: "suggested" | "manual"; reason?: string };
+  /** `methodId`: the delivery option the customer chose at checkout. */
+  shipping: { label: string; amount: Money; mode: "suggested" | "manual"; reason?: string; methodId?: ID };
   paymentMethod: PaymentMethod;
   customerNote?: string;
   adminNote?: string;
   requestedDeliveryDate?: string;
+  /** Checkout only: the coupon behind the line discounts. */
+  coupon?: OrderCoupon;
 }
 
 export interface AdjustItemInput {
@@ -445,7 +458,19 @@ export interface OrderCustomerContext {
 export type InvoiceKind = "invoice" | "revision" | "credit_note";
 
 /** What an invoice shows, frozen when it is issued (later order edits never change it). */
+/** The seller as printed, frozen when the invoice is issued. */
+export interface InvoiceSeller {
+  name: string;
+  addressLines: string[];
+  contact?: string;
+  registrationNumber?: string;
+  taxNumber?: string;
+}
+
 export interface InvoiceSnapshot {
+  /** Missing only on documents issued before this was added: those print the current company. */
+  seller?: InvoiceSeller;
+  coupon?: OrderCoupon;
   orderNumber: string;
   placedAt: ISODateString;
   customerName: string;
@@ -468,7 +493,7 @@ export interface InvoiceSnapshot {
 
 export interface Invoice {
   id: ID;
-  /** e.g. "INV-2026-0007", "INV-2026-0007-R1", "CN-2026-0007". */
+  /** e.g. "INV-2026-0007", "INV-2026-0007-R1", "INV-2026-0007-CN". */
   number: string;
   kind: InvoiceKind;
   /** Revisions and credit notes: the document number they replace or cancel. */

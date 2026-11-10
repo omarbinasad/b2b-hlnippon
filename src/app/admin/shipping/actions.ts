@@ -86,6 +86,10 @@ export async function previewShippingAction(raw: unknown): Promise<ShippingQuote
   return repositories.shipping.quote({
     address: { prefecture: str(a.prefecture, 50), city: str(a.city, 100), postalCode: str(a.postalCode, 10).trim() || undefined },
     customerId: str(v.customerId, 100) || undefined,
+    couponCode: str(v.couponCode, 40) || undefined,
+    customerGroupId: str(v.customerGroupId, 100) || undefined,
+    grams: typeof v.grams === "number" && Number.isFinite(v.grams) ? v.grams : undefined,
+    subtotal: typeof v.subtotal === "number" && Number.isFinite(v.subtotal) ? v.subtotal : undefined,
     items: arr(v.items, 100).map((x) => {
       const i = obj(x);
       return { productId: str(i.productId, 100), variationId: str(i.variationId, 100) || undefined, quantity: num(i.quantity) };

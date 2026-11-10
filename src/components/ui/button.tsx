@@ -20,7 +20,7 @@ const sizes: Record<Size, string> = {
 
 export function buttonClasses({ variant = "primary", size = "md" }: { variant?: Variant; size?: Size } = {}) {
   return cx(
-    "inline-flex items-center justify-center gap-2 rounded-ui font-medium whitespace-nowrap transition-colors",
+    "inline-flex items-center justify-center gap-2 rounded-[var(--button-radius,var(--radius))] font-medium whitespace-nowrap transition-colors",
     "disabled:cursor-not-allowed disabled:opacity-50",
     variants[variant],
     sizes[size],

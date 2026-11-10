@@ -8,7 +8,7 @@ import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { formatMoney } from "@/lib/format";
 import type { FieldErrors, OrderDiscount } from "@/lib/types";
 import { EditPreview, useEditPreview } from "./edit-preview";
-import { AMOUNT_STEP } from "@/lib/orders/calc";
+import { amountStep } from "@/lib/orders/calc";
 import { siteConfig } from "@/config/site";
 
 /**
@@ -82,7 +82,7 @@ export function OrderDiscountButton({ orderId, current, amount }: { orderId: str
                   inputMode="decimal"
                   min={0}
                   max={type === "percent" ? 100 : undefined}
-                  step={type === "percent" ? "0.01" : AMOUNT_STEP}
+                  step={type === "percent" ? "0.01" : amountStep()}
                   value={value}
                   onChange={(e) => setValue(e.target.value)}
                   aria-invalid={Boolean(errors.value)}

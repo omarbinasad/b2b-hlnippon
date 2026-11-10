@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { AllowedLink } from "@/components/admin/capabilities-context";
 import { Card } from "@/components/ui/card";
 import { Pagination } from "@/components/ui/pagination";
 import { Table } from "@/components/ui/table";
@@ -9,6 +9,7 @@ const sourceLabels: Record<StockMovementSource, string> = {
   product_edit: "Product edited",
   order_page: "Changed from an order",
   refund_restock: "Refund restock",
+  inventory_adjust: "Inventory adjustment",
 };
 
 const show = (s: StockInfo) => (s.quantity !== undefined ? `${s.quantity} (${stockLabels[s.status]})` : stockLabels[s.status]);
@@ -49,7 +50,7 @@ export function StockHistory({ movements, pathname, searchParams }: { movements:
                   <td>
                     {sourceLabels[m.source]}
                     {m.orderId && (
-                      <Link href={`/admin/orders/${m.orderId}`} className="block text-xs text-brand hover:underline">Order {m.orderNumber ?? m.orderId}</Link>
+                      <AllowedLink href={`/admin/orders/${m.orderId}`} className="block text-xs text-brand hover:underline">Order {m.orderNumber ?? m.orderId}</AllowedLink>
                     )}
                     {m.note && m.source !== "product_edit" && <span className="block text-xs text-muted">“{m.note}”</span>}
                   </td>

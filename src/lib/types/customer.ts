@@ -49,6 +49,8 @@ export interface AccountStatusEvent {
 }
 
 export interface Customer extends LegacyRef {
+  /** The customer turned off delivery reminders. */
+  remindersOptOut?: boolean;
   id: ID;
   /** Business (trading) name — the only required name. */
   companyName: string;
@@ -129,7 +131,7 @@ export interface RegistrationInput {
   address: { prefecture: string; city: string; area?: string; postalCode: string; addressLine1: string };
   message?: string;
   acceptTerms: boolean;
-  /** Optional copies: Japan Residence Card (front / back) and business license. */
+  /** Optional copies: identity document (front / back) and business license. */
   documents?: DocumentUpload[];
 }
 

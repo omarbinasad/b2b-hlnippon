@@ -29,11 +29,11 @@ function CountLink({ href, icon, label, count, showLabel, className }: { href: "
  * Cart icon with the number of products, opening the cart panel. The cart is loaded on the server per request
  * (customer-specific, never cached publicly); cart actions revalidate every page so the panel follows each change.
  */
-export async function CartLink({ showLabel, className }: { showLabel?: boolean; className?: string }) {
+export async function CartLink({ showLabel, stacked, className }: { showLabel?: boolean; stacked?: boolean; className?: string }) {
   const viewer = await getViewer();
   const access = quickOrderAccess(viewer);
   const cart = access === "approved" && viewer.kind === "customer" ? await repositories.cart.get(viewer.customerId) : undefined;
-  return <CartDrawer access={access} cart={cart} showLabel={showLabel} className={className} />;
+  return <CartDrawer access={access} cart={cart} showLabel={showLabel} stacked={stacked} className={className} />;
 }
 
 /** Bell with the customer's unread notification count, linking to the notification list. */

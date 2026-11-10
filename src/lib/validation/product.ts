@@ -4,7 +4,7 @@
  * backend must enforce the same rules plus uniqueness checks.
  */
 import type { CategoryInput, Dimensions, FieldErrors, ProductInput } from "@/lib/types";
-import { AMOUNT_RULE, isValidAmount } from "../orders/calc.ts";
+import { amountRule, isValidAmount } from "../orders/calc.ts";
 
 export const LIMITS = {
   name: 120,
@@ -70,10 +70,10 @@ function checkPricing(
   if (p.basePrice === undefined) {
     if (priceRequired) errors[`${prefix}basePrice`] = "Enter a price.";
   } else if (!isMoney(p.basePrice)) {
-    errors[`${prefix}basePrice`] = `Enter a valid amount (0 or more, ${AMOUNT_RULE}).`;
+    errors[`${prefix}basePrice`] = `Enter a valid amount (0 or more, ${amountRule()}).`;
   }
   if (p.salePrice !== undefined) {
-    if (!isMoney(p.salePrice)) errors[`${prefix}salePrice`] = `Enter a valid amount (0 or more, ${AMOUNT_RULE}).`;
+    if (!isMoney(p.salePrice)) errors[`${prefix}salePrice`] = `Enter a valid amount (0 or more, ${amountRule()}).`;
     else if (p.basePrice === undefined || (isMoney(p.basePrice) && p.salePrice >= p.basePrice))
       errors[`${prefix}salePrice`] = "Sale price must be lower than the regular price.";
   }

@@ -9,7 +9,7 @@
 import type { Route } from "next";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getAdminActor } from "@/lib/auth/session";
+import { actorWith, getAdminActor, getCapabilities } from "@/lib/auth/session";
 import { repositories } from "@/lib/data";
 import { orderStatuses } from "@/lib/enums";
 import type { StockChange } from "@/lib/orders/stock";
@@ -29,6 +29,7 @@ import type {
   Weight,
 } from "@/lib/types";
 import { ORDER_LIMITS } from "@/lib/validation/order";
+import { storeCountry } from "@/lib/locations";
 
 export type OrderActionResult = { ok: true } | { ok: false; errors: FieldErrors; message: string };
 
@@ -48,7 +49,7 @@ function address(v: unknown): OrderAddressInput {
   return {
     recipientName: str(a.recipientName, 200),
     companyName: optStr(a.companyName, 200),
-    country: "JP",
+    country: storeCountry(),
     prefecture: str(a.prefecture, 100),
     city: str(a.city, 100),
     area: optStr(a.area, 100),
@@ -79,12 +80,30 @@ const failed = (r: { errors: FieldErrors; message?: string }, fallback: string):
   message: r.message ?? Object.values(r.errors)[0] ?? fallback,
 });
 
-async function actorWith(permission: string) {
+/**
+ * Which capability a change needs, field by field: staff such as warehouse can weigh items without being able to change
+ * prices. A change touching several fields needs all of them. DEMO check; the backend must enforce the same.
+ */
+async function actorForEdit(orderId: string, edit: OrderEdit) {
   const actor = await getAdminActor();
-  return actor.permissions.includes(permission) ? { id: actor.id, name: actor.name, role: actor.role } : null;
+  const caps = new Set(await getCapabilities());
+  const who = { id: actor.id, name: actor.name, role: actor.role };
+  if (edit.kind === "discount") return caps.has("order_discounts.edit") ? who : null;
+  if (edit.kind === "add" || edit.kind === "remove") return caps.has("order_items.edit") ? who : null;
+  if (edit.kind === "address") return caps.has("order_addresses.edit") ? who : null;
+  if (edit.kind !== "adjust") return caps.has("orders_edit.edit") ? who : null;
+  const order = await repositories.orders.getById(orderId);
+  const item = order?.items.find((i) => i.id === edit.itemId);
+  const needed: string[] = [];
+  if (edit.unitPrice !== undefined && edit.unitPrice !== item?.unitPrice) needed.push("order_prices.edit");
+  if (edit.quantity !== undefined && edit.quantity !== item?.quantity) needed.push("order_quantities.edit");
+  if (edit.fulfilledWeight !== undefined && JSON.stringify(edit.fulfilledWeight) !== JSON.stringify(item?.fulfilledWeight)) needed.push("delivered_weight.edit");
+  const allowed = needed.length ? needed.every((c) => caps.has(c)) : ["order_prices.edit", "order_quantities.edit", "delivered_weight.edit"].some((c) => caps.has(c));
+  return allowed ? who : null;
 }
 
 function refresh(orderId: string) {
+  revalidatePath("/admin", "layout"); // Sidebar badges and the notification bell.
   revalidatePath("/admin/orders");
   revalidatePath(`/admin/orders/${orderId}`);
   revalidatePath("/account/orders", "layout");
@@ -109,7 +128,7 @@ export async function getOrderableProductAction(productId: string, customerId?: 
 // --- Mutations ------------------------------------------------------------------------
 
 export async function createOrderAction(raw: unknown): Promise<OrderActionResult> {
-  const actor = await actorWith("orders.create");
+  const actor = await actorWith("orders_create.create");
   if (!actor) return denied();
   const v = obj(raw);
   const shipping = obj(v.shipping);
@@ -135,6 +154,15 @@ export async function createOrderAction(raw: unknown): Promise<OrderActionResult
     adminNote: optStr(v.adminNote),
     requestedDeliveryDate: optStr(v.requestedDeliveryDate, 10),
   };
+  // Creating an order doesn't by itself allow setting your own price or discount.
+  const caps = new Set(await getCapabilities());
+  if (!caps.has("order_discounts.edit") && input.items.some((i) => i.discount > 0)) return denied("Your role can't add discounts to an order.");
+  if (!caps.has("order_prices.edit")) {
+    for (const i of input.items) {
+      const quote = await repositories.orders.quoteLine(input.customerId, i.productId, i.variationId, i.quantity);
+      if (quote && quote.unitPrice !== i.unitPrice) return denied("Your role can't change prices. Use the suggested price.");
+    }
+  }
   const result = await repositories.orders.create(input, actor);
   if (!result.ok) return failed(result, "Some fields need attention.");
   refresh(result.value.id);
@@ -142,7 +170,7 @@ export async function createOrderAction(raw: unknown): Promise<OrderActionResult
 }
 
 export async function updateOrderStatusAction(orderId: string, status: string, note?: string): Promise<OrderActionResult> {
-  const actor = await actorWith("orders.update");
+  const actor = await actorWith("order_status.edit");
   if (!actor) return denied();
   if (!orderStatuses.includes(status as (typeof orderStatuses)[number])) return denied("Unknown status.");
   const id = str(orderId, 100);
@@ -153,7 +181,7 @@ export async function updateOrderStatusAction(orderId: string, status: string, n
 }
 
 export async function addOrderNoteAction(orderId: string, type: string, body: string): Promise<OrderActionResult> {
-  const actor = await actorWith("orders.update");
+  const actor = await actorWith("orders_edit.edit");
   if (!actor) return denied();
   const id = str(orderId, 100);
   const noteType = oneOf<OrderNoteType>(type, ["admin", "customer"], "admin");
@@ -174,10 +202,11 @@ function adjustInput(v: Record<string, unknown>): AdjustItemInput {
 }
 
 export async function adjustOrderItemAction(orderId: string, raw: unknown): Promise<OrderActionResult> {
-  const actor = await actorWith("orders.adjust");
-  if (!actor) return denied("You don't have permission to adjust order items.");
   const id = str(orderId, 100);
-  const result = await repositories.orders.adjustItem(id, adjustInput(obj(raw)), actor);
+  const input = adjustInput(obj(raw));
+  const actor = await actorForEdit(id, { kind: "adjust", ...input });
+  if (!actor) return denied("You don't have permission to make this change.");
+  const result = await repositories.orders.adjustItem(id, input, actor);
   if (!result.ok) return failed(result, "The adjustment could not be saved.");
   refresh(id);
   return { ok: true };
@@ -223,11 +252,11 @@ function orderEdit(raw: unknown): OrderEdit | null {
 
 /** Edits an existing order: items (add / remove / replace / quantity / price / weight), order discount, delivery date. */
 export async function editOrderAction(orderId: string, raw: unknown): Promise<OrderActionResult> {
-  const actor = await actorWith("orders.adjust");
-  if (!actor) return denied("You don't have permission to edit orders.");
   const edit = orderEdit(raw);
   if (!edit) return denied("Unknown change.");
   const id = str(orderId, 100);
+  const actor = await actorForEdit(id, edit);
+  if (!actor) return denied("You don't have permission to make this change.");
   const result = await repositories.orders.edit(id, edit, actor);
   if (!result.ok) return failed(result, "The change could not be saved.");
   refresh(id);
@@ -238,10 +267,10 @@ export type OrderEditPreviewResult = { ok: true; preview: OrderEditPreview } | {
 
 /** Before/after totals for an edit, without saving (same validation and calculation as saving). */
 export async function previewOrderEditAction(orderId: string, raw: unknown): Promise<OrderEditPreviewResult> {
-  const actor = await actorWith("orders.adjust");
-  if (!actor) return { ok: false, errors: {}, message: "You don't have permission to edit orders." };
   const edit = orderEdit(raw);
   if (!edit) return { ok: false, errors: {}, message: "Unknown change." };
+  const actor = await actorForEdit(str(orderId, 100), edit);
+  if (!actor) return { ok: false, errors: {}, message: "You don't have permission to make this change." };
   // The reason is checked when saving; an empty one shouldn't block the preview.
   const forPreview = (edit.kind !== "delivery_date" && !(edit.reason ?? "").trim() ? { ...edit, reason: "Preview only" } : edit) as OrderEdit;
   const result = await repositories.orders.previewEdit(str(orderId, 100), forPreview);
@@ -253,7 +282,7 @@ export async function previewOrderEditAction(orderId: string, raw: unknown): Pro
  * (shown everywhere on the site); the order itself and its amounts are not changed.
  */
 export async function setLineStockAction(orderId: string, productId: string, variationId: string | undefined, raw: unknown): Promise<OrderActionResult> {
-  const actor = await actorWith("products.stock");
+  const actor = await actorWith("order_stock.edit");
   if (!actor) return denied("You don't have permission to change stock.");
   const v = obj(raw);
   const change: StockChange =
@@ -273,7 +302,7 @@ export async function setLineStockAction(orderId: string, productId: string, var
 
 /** Records a refund (DEMO: noted on the order only — no money is moved). Optionally restocks refunded units. */
 export async function refundOrderAction(orderId: string, raw: unknown): Promise<OrderActionResult> {
-  const actor = await actorWith("orders.refund");
+  const actor = await actorWith("refunds.refund");
   if (!actor) return denied("You don't have permission to record refunds.");
   const v = obj(raw);
   const input: RefundInput = {
@@ -297,13 +326,24 @@ export async function refundOrderAction(orderId: string, raw: unknown): Promise<
 
 /** Records payment received outside the site (DEMO bookkeeping — never charges anyone). */
 export async function recordPaymentAction(orderId: string, reference?: string): Promise<OrderActionResult> {
-  const actor = await actorWith("orders.update");
+  const actor = await actorWith("orders_edit.edit");
   if (!actor) return denied();
   const id = str(orderId, 100);
   const result = await repositories.orders.recordPayment(id, { reference: optStr(reference, 200) }, actor);
   if (!result.ok) return failed(result, "The payment could not be recorded.");
   refresh(id);
   return { ok: true };
+}
+
+/** Permanently deletes a cancelled order with no payment, refund or invoice (the repository checks). DEMO: server memory. */
+export async function deleteOrderAction(orderId: string): Promise<OrderActionResult> {
+  const actor = await actorWith("orders.delete");
+  if (!actor) return denied("You don't have permission to delete orders.");
+  const id = str(orderId, 100);
+  const result = await repositories.orders.remove(id, actor);
+  if (!result.ok) return failed(result, "The order could not be deleted.");
+  refresh(id);
+  redirect("/admin/orders?notice=deleted" as Route);
 }
 
 /** Form action for the list's one-step "Mark as …" button; reports back via `?notice=`. */
@@ -364,7 +404,7 @@ export async function quoteOrderShippingAction(raw: unknown): Promise<OrderShipp
 
 /** Issues the order's next invoice document: first invoice, revision after changes, or credit note for a cancelled order. */
 export async function issueInvoiceAction(orderId: string, kind: string, reason?: string): Promise<OrderActionResult> {
-  const actor = await actorWith("orders.update");
+  const actor = await actorWith("invoices.create");
   if (!actor) return denied();
   const id = str(orderId, 100);
   const result = await repositories.orders.issueInvoice(id, { kind: oneOf(kind, ["invoice", "revision", "credit_note"] as const, "invoice"), reason: optStr(reason, 300) }, actor);

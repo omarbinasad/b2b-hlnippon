@@ -1,28 +1,25 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { DemoEditingNotice, MockPermissionNote } from "@/components/admin/demo-notice";
-import { StoreSettingsForm } from "@/components/admin/settings/store-settings-form";
-import { PlannedFeatures } from "@/components/ui/feedback";
+import { SettingsNav } from "@/components/admin/settings/settings-nav";
+import { GeneralSettingsForm, ResetDemoButton } from "@/components/admin/settings/settings-forms";
 import { PageHeader } from "@/components/ui/page-header";
 import { repositories } from "@/lib/data";
 import { formatDateTime } from "@/lib/format";
 
-export const metadata: Metadata = { title: "Settings" };
+export const metadata: Metadata = { title: "General settings" };
 
-export default async function SettingsPage() {
-  const settings = await repositories.settings.getStore();
+export default async function GeneralSettingsPage() {
+  const settings = await repositories.company.get();
   return (
     <>
-      <PageHeader title="Store settings" description={`Store location, contact details and units. Last saved ${formatDateTime(settings.updatedAt)}.`} />
+      <PageHeader title="Settings" description={`Currency, location, language and units. Last saved ${formatDateTime(settings.updatedAt)}.`} />
+      <SettingsNav current="general" />
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
-        <StoreSettingsForm settings={settings} />
+        <GeneralSettingsForm settings={settings} />
         <aside className="space-y-4">
-          <p className="text-sm">
-            Shipping zones and rates are under <Link href="/admin/shipping" className="font-medium text-brand hover:underline">Shipping</Link>.
-          </p>
-          <MockPermissionNote permission="settings.manage" />
+          <MockPermissionNote permission="company.manage" />
           <DemoEditingNotice />
-          <PlannedFeatures items={["Staff users and roles", "Email templates"]} />
+          <ResetDemoButton />
         </aside>
       </div>
     </>

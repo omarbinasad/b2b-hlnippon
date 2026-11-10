@@ -1,5 +1,5 @@
 /**
- * Identity document uploads (registration: Japan Residence Card front/back, business license copy): allowed types, size limit, and content-based type detection.
+ * Identity document uploads (registration: identity document front/back, business license copy): allowed types, size limit, and content-based type detection.
  * The browser's file type and extension are never trusted; the backend must apply the same checks (plus virus scanning).
  */
 import type { CustomerDocumentKind, DocumentContentType, DocumentUpload, FieldErrors } from "../types/index.ts";
@@ -8,8 +8,8 @@ import type { CustomerDocumentKind, DocumentContentType, DocumentUpload, FieldEr
 export const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024;
 export const DOCUMENT_ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
 export const DOCUMENT_KINDS: Record<CustomerDocumentKind, string> = {
-  residence_card_front: "Residence Card / 在留カード — front",
-  residence_card_back: "Residence Card / 在留カード — back",
+  residence_card_front: "Identity document, front",
+  residence_card_back: "Identity document, back",
   business_license: "Business license / 営業許可証",
 };
 

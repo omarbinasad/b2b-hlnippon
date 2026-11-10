@@ -7,7 +7,7 @@ interface PaginationProps {
   totalPages: number;
   /** Base path; existing query params (filters) are preserved. */
   pathname: string;
-  searchParams?: Record<string, string | undefined>;
+  searchParams?: Record<string, string | string[] | undefined>;
 }
 
 /** Page numbers to show: first, last, and a window around the current page, with gaps as "…". */
@@ -23,7 +23,10 @@ export function Pagination({ page, totalPages, pathname, searchParams = {} }: Pa
 
   const hrefFor = (p: number) => {
     const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(searchParams)) if (value && key !== "page") params.set(key, value);
+    for (const [key, value] of Object.entries(searchParams)) {
+      if (!value || key === "page") continue;
+      for (const v of Array.isArray(value) ? value : [value]) params.append(key, v);
+    }
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return (qs ? `${pathname}?${qs}` : pathname) as Route;

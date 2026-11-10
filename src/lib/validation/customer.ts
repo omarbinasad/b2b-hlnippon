@@ -2,9 +2,9 @@
  * Customer, address and group validation shared by the admin forms and the mock
  * repository. The backend must enforce the same rules (plus uniqueness and permissions).
  */
-import { isJpPhone, isEmail, isPostcode } from "@/lib/customers/contact";
+import { isEmail, isPhone, isPostcode, phoneError, postcodeError } from "@/lib/customers/contact";
 import { checkStatusChange } from "@/lib/customers/status";
-import { JP_PREFECTURES } from "@/lib/locations";
+import { addressLabels, isKnownRegion } from "@/lib/locations";
 import type { AddressInput, CustomerDetailsInput, CustomerGroupInput, CustomerQuickInput, FieldErrors } from "@/lib/types";
 
 export const CUSTOMER_LIMITS = { name: 120, text: 200, note: 1000 } as const;
@@ -17,7 +17,7 @@ function contact(errors: FieldErrors, input: { companyName: string; contactName?
   const phone = input.phone?.trim();
   const email = input.email?.trim();
   if (!phone && !email) errors.phone = "Enter a phone number or an email address.";
-  if (phone && !isJpPhone(phone)) errors.phone = "Use a Japanese phone number, e.g. 03-1234-5678 or 090-1234-5678.";
+  if (phone && !isPhone(phone)) errors.phone = phoneError();
   if (email && (!isEmail(email) || email.length > CUSTOMER_LIMITS.text)) errors.email = "Enter a valid email address.";
 }
 
@@ -35,7 +35,7 @@ export function validateCustomerDetails(input: CustomerDetailsInput): FieldError
     if ((input[key] ?? "").length > CUSTOMER_LIMITS.text) errors[key] = "Too long.";
   }
   if (input.vatRegistrationNumber && !/^[\d-]{9,15}$/.test(input.vatRegistrationNumber.trim()))
-    errors.vatRegistrationNumber = "Use digits only (BIN is usually 9 or 13 digits).";
+    errors.vatRegistrationNumber = "Use 9 to 15 digits (dashes allowed).";
   if ((input.internalNote ?? "").length > CUSTOMER_LIMITS.note) errors.internalNote = `Keep notes under ${CUSTOMER_LIMITS.note} characters.`;
   return errors;
 }
@@ -46,16 +46,16 @@ export function validateAddress(input: AddressInput): FieldErrors {
     ["label", "Label"],
     ["recipientName", "Recipient name"],
     ["phone", "Phone"],
-    ["prefecture", "Prefecture"],
+    ["prefecture", addressLabels().region],
     ["city", "City"],
-    ["postalCode", "Postcode"],
+    ["postalCode", addressLabels().postcode],
     ["addressLine1", "Street address"],
   ];
   for (const [key, label] of required) if (!String(input[key] ?? "").trim()) errors[key] = `${label} is required.`;
   if (input.type !== "shipping" && input.type !== "billing") errors.type = "Choose delivery or billing.";
-  if (input.prefecture && !JP_PREFECTURES.includes(input.prefecture as (typeof JP_PREFECTURES)[number])) errors.prefecture = "Choose a prefecture.";
-  if (input.postalCode && !isPostcode(input.postalCode)) errors.postalCode = "Use a 7-digit postcode, e.g. 160-0023.";
-  if (input.phone && !errors.phone && !isJpPhone(input.phone)) errors.phone = "Use a Japanese phone number.";
+  if (input.prefecture && !isKnownRegion(input.prefecture)) errors.prefecture = `Choose a ${addressLabels().region.toLowerCase()}.`;
+  if (input.postalCode && !isPostcode(input.postalCode)) errors.postalCode = postcodeError();
+  if (input.phone && !errors.phone && !isPhone(input.phone)) errors.phone = phoneError();
   for (const key of ["label", "recipientName", "companyName", "city", "area", "addressLine1", "addressLine2"] as const) {
     if (!errors[key] && (input[key] ?? "").length > CUSTOMER_LIMITS.text) errors[key] = "Too long.";
   }

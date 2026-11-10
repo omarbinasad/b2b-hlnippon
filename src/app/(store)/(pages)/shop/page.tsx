@@ -1,7 +1,7 @@
 import type { Metadata, Route } from "next";
 import Link from "next/link";
-import { ProductCard, type CardAction } from "@/components/product/product-card";
-import { FilterSidebar, type PriceAccess, type ShopFilters, type SidebarCategory } from "@/components/shop/filter-sidebar";
+import { ProductCard } from "@/components/product/product-card";
+import { FilterSidebar, type ShopFilters, type SidebarCategory } from "@/components/shop/filter-sidebar";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/feedback";
 import { Select } from "@/components/ui/field";
@@ -9,9 +9,10 @@ import { Icon } from "@/components/ui/icons";
 import { PageHeader } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
 import { categoryIcons, defaultCategoryIcon } from "@/config/storefront";
-import { canSeeWholesalePrices, getViewer } from "@/lib/auth/session";
+import { getViewer, getPricingCustomerId } from "@/lib/auth/session";
 import { buildCategoryTree, type CategoryNode } from "@/lib/catalog/category-tree";
 import { repositories } from "@/lib/data";
+import { loadCardData, priceAccessOf } from "@/lib/storefront/product-cards";
 import { stockOptions, stockStatuses } from "@/lib/enums";
 import { formatMoney } from "@/lib/format";
 import { flatParams, oneOf, param } from "@/lib/list-params";
@@ -43,8 +44,10 @@ const findName = (nodes: CategoryNode[], slug?: string): string | undefined => {
 export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
   const sp = await searchParams;
   const viewer = await getViewer();
-  const priceAccess: PriceAccess =
-    viewer.kind === "admin" ? "admin" : viewer.kind === "customer" ? (canSeeWholesalePrices(viewer) ? "approved" : "pending") : "guest";
+  const priceAccess = priceAccessOf(viewer);
+  const seesPrices = priceAccess === "approved" || priceAccess === "admin";
+  const pricingId = await getPricingCustomerId();
+  const view = param(sp, "view") === "list" ? "list" : "grid";
 
   const [categories, brands] = await Promise.all([repositories.products.listCategories(), repositories.products.listBrands()]);
 
@@ -57,9 +60,9 @@ export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
     category: categories.some((c) => c.slug === param(sp, "category")) ? param(sp, "category") : undefined,
     brands: [...new Set((param(sp, "brand") ?? "").split(","))].filter((s) => brands.some((b) => b.slug === s)),
     stock: oneOf(param(sp, "stock"), stockStatuses),
-    // The price filter only applies to approved customers (guests must not learn anything about prices).
-    min: priceAccess === "approved" ? min : undefined,
-    max: priceAccess === "approved" ? max : undefined,
+    // The price filter applies to whoever sees prices: approved customers and staff (guests must learn nothing about prices).
+    min: seesPrices ? min : undefined,
+    max: seesPrices ? max : undefined,
     order: oneOf(param(sp, "order"), Object.keys(ORDERS) as OrderKey[]) ?? "name",
   };
   const order = ORDERS[filters.order as OrderKey];
@@ -82,7 +85,7 @@ export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
 
   const priced = filters.min !== undefined || filters.max !== undefined;
   const priceIds =
-    priced && viewer.kind === "customer" ? await repositories.pricing.productIdsInPriceRange(viewer.customerId, { min: filters.min, max: filters.max }) : undefined;
+    priced && pricingId ? await repositories.pricing.productIdsInPriceRange(pricingId, { min: filters.min, max: filters.max }) : undefined;
 
   const result = await repositories.products.list({
     search: filters.q,
@@ -97,30 +100,13 @@ export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
   });
 
   // Customer-specific prices are resolved server-side for the current page only.
-  const prices =
-    priceAccess === "approved" && viewer.kind === "customer"
-      ? await repositories.pricing.getCustomerPrices(viewer.customerId, result.items.map((p) => p.id))
-      : [];
-  const priceFor = (id: string) => prices.find((p) => p.productId === id)?.unitPrice;
+  const { priceFor, actionFor } = await loadCardData(result.items, viewer);
 
-  // The round + on each card. Same rules as the quick order sheet (minimum quantity, stock, price, quantity rules).
-  const orderLines =
-    priceAccess === "approved" && viewer.kind === "customer" && result.items.length
-      ? (await repositories.cart.quickOrder(viewer.customerId, { productIds: result.items.map((p) => p.id) })).lines
-      : [];
-  const actionFor = (product: (typeof result.items)[number]): CardAction => {
-    if (priceAccess === "guest") return { kind: "link", href: "/login", label: "Log in to order" };
-    if (priceAccess === "pending") return { kind: "disabled", label: "Available once your account is approved" };
-    if (priceAccess === "admin") return { kind: "disabled", label: "Ordering is for approved customers" };
-    if (product.hasVariations) return { kind: "link", href: `/shop/${product.slug}`, label: "Choose options" };
-    const line = orderLines.find((l) => l.productId === product.id);
-    if (!line) return { kind: "disabled", label: "Not available to order" };
-    return line.error ? { kind: "disabled", label: line.error } : { kind: "add", quantity: line.minQuantity };
-  };
+  const priceBounds = seesPrices && pricingId ? await repositories.pricing.priceBounds(pricingId) : undefined;
 
   const tree = buildCategoryTree(categories);
   const sidebarTree: SidebarCategory[] = tree.map((c) => ({ ...c, icon: categoryIcons[c.slug] ?? defaultCategoryIcon }));
-  const sidebar = (idPrefix: string) => <FilterSidebar tree={sidebarTree} brands={brands} filters={filters} priceAccess={priceAccess} href={href} idPrefix={idPrefix} />;
+  const sidebar = <FilterSidebar tree={sidebarTree} brands={brands} filters={filters} priceAccess={priceAccess} href={href} priceBounds={priceBounds} />;
 
   const chips = [
     filters.q && { label: `Search: ${filters.q}`, href: href({ q: undefined }) },
@@ -139,7 +125,7 @@ export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
       <PageHeader title="Shop" description="Browse the wholesale catalog. Prices are shown to approved business customers." />
 
       <div className="lg:grid lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-6">
-        <aside aria-label="Product filters" className="hidden lg:block">{sidebar("desktop")}</aside>
+        <aside aria-label="Product filters" className="hidden lg:block">{sidebar}</aside>
 
         <div className="min-w-0">
           {/* Phones and tablets: the same filters in a disclosure above the results. */}
@@ -151,7 +137,7 @@ export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
               </span>
               <Icon name="chevronDown" className="size-4 text-muted transition-transform group-open/filters:rotate-180" />
             </summary>
-            <div className="mt-3">{sidebar("mobile")}</div>
+            <div className="mt-3">{sidebar}</div>
           </details>
 
           <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
@@ -186,16 +172,24 @@ export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
             )}
           </div>
 
+          <nav aria-label="Product layout" className="flex justify-end gap-1">
+            {(["grid", "list"] as const).map((v) => (
+              <Link key={v} href={`/shop?${new URLSearchParams({ ...flatParams(sp), view: v }).toString()}` as "/shop"} aria-current={view === v ? "true" : undefined} className={view === v ? "rounded-ui bg-brand-soft px-3 py-1.5 text-sm font-medium text-brand" : "rounded-ui px-3 py-1.5 text-sm text-muted hover:bg-surface-muted"}>
+                {v === "grid" ? "Grid" : "List"}
+              </Link>
+            ))}
+          </nav>
+
           {result.items.length === 0 ? (
             <EmptyState
               title="No products found"
               description={priced ? "No products have a price for your account in this range." : "Try a different search term, category, brand or availability."}
             />
           ) : (
-            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+            <ul className={view === "list" ? "space-y-3" : "grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4"}>
               {result.items.map((product) => (
                 <li key={product.id}>
-                  <ProductCard product={product} price={priceFor(product.id)} access={priceAccess} action={actionFor(product)} />
+                  <ProductCard product={product} price={priceFor(product.id)} access={priceAccess} action={actionFor(product)} layout={view} />
                 </li>
               ))}
             </ul>

@@ -1,5 +1,6 @@
 import "server-only";
 
+import { siteConfig } from "@/config/site";
 import type { Paginated } from "@/lib/types";
 import type { DateBounds, SortDir } from "./repositories";
 
@@ -22,9 +23,11 @@ export function matches(search: string | undefined, ...fields: (string | undefin
   return !term || fields.some((f) => f?.toLowerCase().includes(term));
 }
 
-/** Mock timestamps carry the store offset, so the first 10 chars are the local date. */
+/** The calendar date in the store's time zone. Sample data carries the store's offset; new records are stamped in UTC. */
+export const storeDay = (iso: string) => (iso.endsWith("Z") ? new Intl.DateTimeFormat("en-CA", { timeZone: siteConfig.timeZone }).format(new Date(iso)) : iso.slice(0, 10));
+
 export const withinDates = (iso: string | undefined, { from, to }: DateBounds) =>
-  (!from && !to) || (!!iso && (!from || iso.slice(0, 10) >= from) && (!to || iso.slice(0, 10) <= to));
+  (!from && !to) || (!!iso && (!from || storeDay(iso) >= from) && (!to || storeDay(iso) <= to));
 
 export type SortKey = string | number | undefined;
 

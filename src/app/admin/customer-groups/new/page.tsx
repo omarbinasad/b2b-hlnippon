@@ -16,7 +16,7 @@ export default function NewGroupPage() {
         <Card>
           <GroupForm />
         </Card>
-        <MockPermissionNote permission="customer-groups.manage" />
+        <MockPermissionNote permission="customers.edit" />
         <DemoEditingNotice />
       </div>
     </>

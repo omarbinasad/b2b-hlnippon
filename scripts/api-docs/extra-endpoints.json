@@ -1,0 +1,22 @@
+[
+  { "route": "POST /auth/login", "perm": "public", "note": "Rate-limit and lock out repeated failures. A generic error: never say whether the email exists. Sets the session (see Sessions).", "body": { "email": "buyer@example.com", "password": "string", "remember": false }, "response": { "user": { "id": "string", "kind": "customer", "name": "string", "email": "string", "customerId": "string", "customerStatus": "approved", "roleId": null, "capabilities": [] }, "csrfToken": "string" } },
+  { "route": "POST /auth/logout", "perm": "signed in", "note": "Ends the session on the server. Response 204.", "status": 204 },
+  { "route": "GET /auth/me", "perm": "public", "note": "The signed-in user, or 401. The frontend calls it on the server on every request that depends on the viewer. Staff get their capabilities; customers get their approval status.", "response": { "user": { "id": "string", "kind": "staff", "name": "string", "email": "string", "customerId": null, "customerStatus": null, "roleId": "role-administrator", "capabilities": ["orders.view"] } } },
+  { "route": "POST /auth/forgot-password", "perm": "public", "note": "Always responds 202, whether or not the email exists. Rate-limit. The link holds a single-use token that expires.", "body": { "email": "buyer@example.com" }, "status": 202 },
+  { "route": "POST /auth/reset-password", "perm": "public", "note": "Checks the token and the password policy; ends the user's other sessions. Response 204.", "body": { "token": "string", "password": "string" }, "status": 204 },
+  { "route": "POST /auth/change-password", "perm": "signed in", "note": "Needs the current password. Response 204.", "body": { "currentPassword": "string", "password": "string" }, "status": 204 },
+  { "route": "GET /auth/csrf", "perm": "public", "note": "Only with cookie sessions, if the backend uses a CSRF token.", "response": { "csrfToken": "string" } },
+  { "route": "POST /auth/staff-invitations/accept", "perm": "public", "note": "A staff invitation link sets the password. Single use, expires.", "body": { "token": "string", "password": "string" }, "status": 204 },
+
+  { "route": "GET /orders/{id}/invoices/{invoiceId}/pdf", "perm": "invoices.view, or the customer who owns the order", "note": "Server-generated PDF from the frozen invoice. application/pdf with Content-Disposition: attachment, Cache-Control: private, no-store. Another customer's invoice is 404. The demo only offers browser printing, which is not this." },
+  { "route": "GET /orders/{id}/packing-slip/pdf", "perm": "orders.view", "note": "Server-generated PDF. No prices. Same headers as invoices." },
+  { "route": "GET /quotations/{id}/pdf", "perm": "quotations.view, or the customer it belongs to", "note": "Server-generated PDF of a sent quote. Same headers as invoices." },
+  { "route": "POST /documents/{id}/signed-url", "perm": "as the document", "note": "Optional, if files live on object storage: a short-lived link to a private file, checked per user. Never a permanent public URL.", "response": { "url": "string", "expiresAt": "2026-01-01T00:00:00Z" } },
+
+  { "route": "GET /admin/reports/export", "perm": "reports.export", "note": "text/csv. Query: report (sales, products, customers, coupons, inventory...), from, to. Neutralize spreadsheet formulas in cells (a leading = + - @). Log who exported what." },
+  { "route": "GET /admin/orders/export", "perm": "orders.export", "note": "text/csv with the same filters as GET /orders. Run big exports as background jobs." },
+  { "route": "GET /admin/customers/export", "perm": "customers.export", "note": "text/csv with the same filters as GET /admin/customers. Personal data: log every export." },
+  { "route": "GET /admin/products/export", "perm": "products.export", "note": "text/csv with the same filters as GET /admin/products." },
+
+  { "route": "POST /webhooks/payments/{provider}", "perm": "signature from the provider", "note": "Only if a gateway is added. Verify the signature, process idempotently, then mark the order paid. Choosing a payment method at checkout never marks an order paid." }
+]

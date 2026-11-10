@@ -1,13 +1,15 @@
 import "server-only";
 
 import { CART_LIMITS, NO_PRICE_ERROR, cartLineId, checkCartLine, mergeCartLines } from "@/lib/orders/cart";
+import { pricingCustomerById } from "./mock/standard-customer";
 import { fromMinor, toMinor } from "@/lib/orders/calc";
 import { lineStock } from "@/lib/orders/stock";
 import { tierLabel } from "@/lib/pricing/engine";
-import type { Cart, CartLine, CartLineInput, Customer, ID, QuickOrderLine } from "@/lib/types";
+import { normalizeCode } from "@/lib/coupons/engine";
+import type { Cart, CartCoupon, CartLine, CartLineInput, Customer, ID, QuickOrderLine } from "@/lib/types";
+import { couponLine, evaluateCode } from "./mock-coupons";
 import { mockProductRepository } from "./mock-catalog";
 import { mockProducts } from "./mock/catalog";
-import { mockCustomers } from "./mock/customers";
 import { quantityLimitsFor, quotePrice } from "./mock/pricing-rules";
 import type { CartRepository, SaveResult } from "./repositories";
 
@@ -16,18 +18,21 @@ import type { CartRepository, SaveResult } from "./repositories";
  * restart. Only product, option and quantity are stored; prices are resolved on every read, so a rule or sale change
  * shows up in the cart immediately. The backend keeps carts in its database.
  */
-const store = globalThis as typeof globalThis & { __mockCarts?: Map<ID, { lines: CartLineInput[]; updatedAt: string }> };
+const store = globalThis as typeof globalThis & { __mockCarts?: Map<ID, { lines: CartLineInput[]; couponCode?: string; updatedAt: string }> };
 store.__mockCarts ??= new Map();
 const carts = store.__mockCarts;
 
 export const cartLines = (customerId: ID): CartLineInput[] => structuredClone(carts.get(customerId)?.lines ?? []);
 export const clearCart = (customerId: ID) => void carts.delete(customerId);
 
-const approved = (customerId: ID) => mockCustomers.find((c) => c.id === customerId && c.status === "approved");
+const approved = (customerId: ID) => {
+  const c = pricingCustomerById(customerId);
+  return c?.status === "approved" ? c : undefined;
+};
 const notAllowed = { ok: false as const, errors: {}, message: "Only approved business customers can use the cart." };
 
 /** Products per quick order page (each may add several option lines). */
-export const QUICK_ORDER_PRODUCTS_PER_PAGE = 20;
+export const QUICK_ORDER_PRODUCTS_PER_PAGE = 10;
 
 /** Who prices quick order lines when the viewer may not see prices (prices are then removed before returning). */
 const NO_PRICE_VIEWER = { id: "no-price-viewer", status: "pending" as const };
@@ -78,20 +83,57 @@ export function priceCartLine(customer: Pick<Customer, "id" | "groupId" | "statu
   };
 }
 
+/** The cart's coupon, checked against the cart as it is now. */
+function cartCoupon(customer: Customer, lines: CartLine[], code?: string): CartCoupon | undefined {
+  if (!code) return undefined;
+  const r = evaluateCode(code, customer, couponLines(lines));
+  return r.ok ? { code, discount: r.discount } : { code, error: r.error };
+}
+
+const couponLines = (lines: CartLine[]) => lines.filter((l) => l.lineTotal !== undefined).map((l) => couponLine({ id: l.id, productId: l.productId, quantity: l.quantity, lineTotal: l.lineTotal! }));
+
+/** Line discounts for checkout: lineId → amount, with the code. Null when no coupon applies. */
+export function checkoutCoupon(customer: Customer) {
+  const code = carts.get(customer.id)?.couponCode;
+  if (!code) return null;
+  const lines = (carts.get(customer.id)?.lines ?? []).map((l) => priceCartLine(customer, l));
+  const r = evaluateCode(code, customer, couponLines(lines));
+  return r.ok ? { code, amount: r.discount, allocations: r.allocations } : { code, error: r.error };
+}
+
 function view(customer: Customer): Cart {
   const stored = carts.get(customer.id);
   const lines = (stored?.lines ?? []).map((l) => priceCartLine(customer, l));
   const subtotal = lines.reduce((sum, l) => sum + (l.lineTotal === undefined ? 0 : toMinor(l.lineTotal)), 0);
-  return { customerId: customer.id, lines, itemsSubtotal: fromMinor(subtotal), valid: lines.length > 0 && lines.every((l) => !l.error), updatedAt: stored?.updatedAt };
+  return { customerId: customer.id, lines, itemsSubtotal: fromMinor(subtotal), coupon: cartCoupon(customer, lines, stored?.couponCode), valid: lines.length > 0 && lines.every((l) => !l.error), updatedAt: stored?.updatedAt };
 }
 
 function save(customer: Customer, lines: CartLineInput[]) {
-  if (lines.length) carts.set(customer.id, { lines, updatedAt: new Date().toISOString() });
+  if (lines.length) carts.set(customer.id, { lines, couponCode: carts.get(customer.id)?.couponCode, updatedAt: new Date().toISOString() });
   else carts.delete(customer.id);
   return view(customer);
 }
 
 export const mockCartRepository: CartRepository = {
+  async applyCoupon(customerId, raw) {
+    const customer = approved(customerId);
+    if (!customer) return notAllowed;
+    const code = normalizeCode(String(raw));
+    if (!code) return { ok: false, errors: { coupon: "Enter a coupon code." }, message: "Enter a coupon code." };
+    const stored = carts.get(customerId);
+    if (!stored?.lines.length) return { ok: false, errors: { coupon: "Your cart is empty." }, message: "Your cart is empty." };
+    const r = evaluateCode(code, customer, couponLines(stored.lines.map((l) => priceCartLine(customer, l))));
+    if (!r.ok) return { ok: false, errors: { coupon: r.error }, message: r.error };
+    stored.couponCode = code;
+    return { ok: true, value: view(customer) };
+  },
+  async removeCoupon(customerId) {
+    const customer = approved(customerId);
+    if (!customer) return notAllowed;
+    const stored = carts.get(customerId);
+    if (stored) stored.couponCode = undefined;
+    return { ok: true, value: view(customer) };
+  },
   async get(customerId) {
     const customer = approved(customerId);
     return customer ? view(customer) : { customerId, lines: [], itemsSubtotal: 0, valid: false };

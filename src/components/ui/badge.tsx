@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { accountStatusLabels } from "@/lib/customers/status";
 import { stockLabels } from "@/lib/format";
 import { orderStatusLabels, paymentStatusLabels } from "@/lib/orders/status";
-import type { AccountStatus, OrderStatus, PaymentStatus, StockStatus } from "@/lib/types";
+import type { AccountStatus, OrderStatus, PaymentStatus, StockStatus, QuotationStatus } from "@/lib/types";
 import { cx } from "@/lib/cx";
 
 export type Tone = "neutral" | "brand" | "success" | "warning" | "danger" | "info";
@@ -66,3 +66,13 @@ export const AccountStatusBadge = ({ status }: { status: AccountStatus }) => (
 export const StockBadge = ({ status }: { status: StockStatus }) => (
   <Badge tone={stockTones[status]}>{stockLabels[status]}</Badge>
 );
+
+export const quotationStatus: Record<QuotationStatus, { label: string; tone: Tone }> = {
+  requested: { label: "Waiting for a quote", tone: "warning" },
+  quoted: { label: "Quote ready", tone: "info" },
+  accepted: { label: "Accepted", tone: "success" },
+  rejected: { label: "Rejected", tone: "neutral" },
+  declined: { label: "Declined", tone: "danger" },
+  expired: { label: "Expired", tone: "neutral" },
+};
+export const QuotationStatusBadge = ({ status }: { status: QuotationStatus }) => <Badge tone={quotationStatus[status].tone}>{quotationStatus[status].label}</Badge>;

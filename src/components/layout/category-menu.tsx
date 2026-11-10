@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "@/components/ui/icons";
 import type { CategoryNode } from "@/lib/catalog/category-tree";
 import { cx } from "@/lib/cx";
@@ -19,7 +19,7 @@ const TWO_COLUMNS_FROM = 12;
 const HOVER_DELAY = 120;
 
 const href = (slug: string) => `/shop?category=${slug}` as Route;
-const row = "flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm font-medium";
+const row = "flex w-full items-center gap-3 px-4 py-2 text-left text-sm font-medium";
 
 /** Nested category links (any depth) inside the sub-panel. */
 function Branch({ nodes, nested = false }: { nodes: CategoryNode[]; nested?: boolean }) {
@@ -38,10 +38,11 @@ function Branch({ nodes, nested = false }: { nodes: CategoryNode[]; nested?: boo
 }
 
 /**
- * "All categories" menu: a panel of top-level categories (icon, name, arrow) and, beside it,
- * the subcategories of the active one. A row becomes active on hover, keyboard focus or
- * click/tap; its sub-panel follows it in the tab order. Closes on Escape, outside click and
- * navigation. Long lists scroll inside the panel.
+ * "All categories" menu: a panel of top-level categories (icon, name, arrow) and, beside the row,
+ * the subcategories of the active one. Every category name is a link to its page. A row with
+ * subcategories opens its sub-panel on hover or keyboard focus; the sub-panel follows it in the tab
+ * order. The sub-panel lines up with its row, moved up only as far as needed to stay inside the menu.
+ * Closes on Escape, outside click and navigation. Long lists scroll inside the panel.
  */
 export function CategoryMenu({ categories }: { categories: MenuCategory[] }) {
   const [open, setOpen] = useState(false);
@@ -50,6 +51,19 @@ export function CategoryMenu({ categories }: { categories: MenuCategory[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const wrapper = useRef<HTMLDivElement>(null);
+  const sub = useRef<HTMLDivElement>(null);
+  const rows = useRef(new Map<string, HTMLElement>());
+
+  /** Puts the open sub-panel beside its row (layout only, no re-render). */
+  const place = () => {
+    const row = active ? rows.current.get(active) : undefined;
+    if (!row || !wrapper.current || !sub.current) return;
+    const top = row.getBoundingClientRect().top - wrapper.current.getBoundingClientRect().top;
+    const room = Math.max(0, wrapper.current.offsetHeight - sub.current.offsetHeight);
+    sub.current.style.top = `${Math.round(Math.min(Math.max(0, top), room))}px`;
+  };
+  useLayoutEffect(place, [active]);
   const pathname = usePathname();
   const [lastPath, setLastPath] = useState(pathname);
   if (pathname !== lastPath) {
@@ -106,9 +120,9 @@ export function CategoryMenu({ categories }: { categories: MenuCategory[] }) {
       </button>
 
       {/* Positioned wrapper: sub-panels are placed against it, so the scrolling list never clips them. */}
-      <div id={panelId} hidden={!open} className="absolute top-full left-0 z-40 mt-2" onMouseLeave={() => hover(null)}>
+      <div ref={wrapper} id={panelId} hidden={!open} className="absolute top-full left-0 z-40 mt-2" onMouseLeave={() => hover(null)}>
         <div className="w-72 overflow-hidden rounded-ui border border-line bg-surface shadow-lg">
-          <ul className="max-h-[min(70vh,40rem)] overflow-y-auto overscroll-contain">
+          <ul className="scrollbar-thin max-h-[min(80vh,40rem)] overflow-y-auto overscroll-contain" onScroll={place}>
             <li className="border-b border-line">
               <Link href="/shop" onMouseEnter={() => hover(null)} onFocus={() => setActive(null)} className={cx(row, "text-brand hover:bg-surface-muted")}>
                 <Icon name="store" className="size-5 shrink-0" />
@@ -128,26 +142,29 @@ export function CategoryMenu({ categories }: { categories: MenuCategory[] }) {
                     </Link>
                   ) : (
                     <>
-                      <button
-                        type="button"
+                      <Link
+                        href={href(c.slug)}
+                        ref={(el) => {
+                          if (el) rows.current.set(c.slug, el);
+                          else rows.current.delete(c.slug);
+                        }}
                         aria-expanded={isActive}
                         aria-controls={subId}
                         onMouseEnter={() => hover(c.slug)}
                         onFocus={() => setActive(c.slug)}
-                        // Tap / click opens (never toggles off — touch also fires a hover first).
-                        onClick={() => setActive(c.slug)}
                         className={cx(row, isActive ? "bg-brand-soft text-brand" : "hover:bg-surface-muted")}
                       >
                         <Icon name={c.icon} className="size-5 shrink-0 text-brand" />
                         {c.name}
                         <Icon name="chevronRight" className="ml-auto size-4 text-muted" />
-                      </button>
+                      </Link>
                       {isActive && (
                         <div
+                          ref={sub}
                           id={subId}
                           onMouseEnter={hold}
                           className={cx(
-                            "absolute top-0 left-full ml-1 max-h-[min(70vh,40rem)] overflow-y-auto overscroll-contain rounded-ui border border-line bg-surface p-2 shadow-lg",
+                            "scrollbar-thin absolute top-0 left-full ml-1 max-h-[min(80vh,40rem)] overflow-y-auto overscroll-contain rounded-ui border border-line bg-surface p-2 shadow-lg",
                             c.children.length >= TWO_COLUMNS_FROM ? "w-[28rem]" : "w-64",
                           )}
                         >

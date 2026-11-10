@@ -24,9 +24,8 @@
 import type { AppliedTaxRate, FieldErrors, ID, OrderTaxSnapshot, TaxClass, TaxLocation, TaxRate, TaxRateInput, TaxSettings } from "@/lib/types";
 import { allocateMinor, fromMinor, isValidPercent, toMinor } from "../orders/calc.ts";
 
-import { isPostcode, postcodeKey } from "../customers/contact.ts";
-import { JP_PREFECTURES as TAX_PREFECTURES } from "../locations.ts";
-export { TAX_PREFECTURES };
+import { isPostcode, postcodeError, postcodeKey } from "../customers/contact.ts";
+import { addressLabels, isKnownRegion } from "../locations.ts";
 
 const norm = (s?: string) => (s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
@@ -47,8 +46,8 @@ export const locationLevelLabel: Record<TaxLocation["type"], string> = {
 export function taxLocationLabel(l: TaxLocation) {
   if (l.type === "postcode") return `Postcode ${l.postalCode}`;
   if (l.type === "city") return `${l.city}, ${l.prefecture}`;
-  if (l.type === "prefecture") return `${l.prefecture} prefecture`;
-  return "All of Japan";
+  if (l.type === "prefecture") return l.prefecture;
+  return "Whole country";
 }
 
 // --- Matching -------------------------------------------------------------------------------
@@ -62,12 +61,12 @@ export interface RateMatch {
 export function matchTaxRate(rates: TaxRate[], taxClass: TaxClass, address: TaxAddress): RateMatch {
   if (taxClass === "exempt") return { explanation: "Exempt class — never taxed." };
   const pool = rates.filter((r) => r.enabled && r.taxClass === taxClass);
-  const country = (address.country ?? "JP").toUpperCase();
+  const country = address.country?.toUpperCase();
   const steps: [TaxLocation["type"], (l: TaxLocation) => boolean][] = [
     ["postcode", (l) => !!address.postalCode && l.type === "postcode" && postcodeKey(l.postalCode) === postcodeKey(address.postalCode)],
     ["city", (l) => l.type === "city" && norm(l.city) === norm(address.city) && norm(l.prefecture) === norm(address.prefecture)],
     ["prefecture", (l) => l.type === "prefecture" && norm(l.prefecture) === norm(address.prefecture)],
-    ["country", (l) => l.type === "country" && l.country === country],
+    ["country", (l) => l.type === "country" && (!country || l.country.toUpperCase() === country)],
   ];
   for (const [level, test] of steps) {
     const rate = pool.find((r) => test(r.location));
@@ -285,10 +284,10 @@ export function validateTaxRate(input: TaxRateInput, others: TaxRate[], classes:
   if (!classes.includes(input.taxClass)) errors.taxClass = "Choose an existing tax class.";
   else if (input.taxClass === "exempt") errors.taxClass = "The exempt class is never taxed — choose another class.";
   const l = input.location;
-  if (l.type === "postcode" && !isPostcode(l.postalCode)) errors.location = "Use a 7-digit postcode, e.g. 160-0023.";
-  if ((l.type === "prefecture" || l.type === "city") && !TAX_PREFECTURES.some((d) => norm(d) === norm(l.prefecture))) errors.location = "Choose a prefecture.";
+  if (l.type === "postcode" && !isPostcode(l.postalCode)) errors.location = postcodeError();
+  if ((l.type === "prefecture" || l.type === "city") && !isKnownRegion(l.prefecture)) errors.location = `Choose a ${addressLabels().region.toLowerCase()}.`;
   if (l.type === "city" && !l.city.trim()) errors.location = "Enter the city.";
-  if (l.type === "country" && l.country !== "JP") errors.location = "Only Japan is supported.";
+  if (l.type === "country" && !/^[A-Za-z]{2}$/.test(l.country)) errors.location = "Choose a country.";
   if (!errors.location && !errors.taxClass && input.enabled) {
     const clash = others.find((r) => r.enabled && r.taxClass === input.taxClass && locationKey(r.location) === locationKey(l));
     if (clash) errors.location = `“${clash.name}” already covers ${taxLocationLabel(l)} for this class. Only one enabled rate per class and location.`;

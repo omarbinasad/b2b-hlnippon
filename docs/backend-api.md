@@ -1,5 +1,7 @@
 # Backend API handoff
 
+> **Superseded by `API-CONTRACTS.md`** for routes and types. Keep this file for its longer notes on orders, pricing, tax and shipping. Where it mentions a currency or time zone, read that as the store's settings: they come from company settings, not from any fixed value.
+
 Contract between the Next.js frontend (`b2b-commerce`) and the future backend. It is framework-neutral: any
 stack that serves this HTTP/JSON API will work without changes to the page UI.
 
@@ -63,7 +65,7 @@ All non-2xx responses use one shape:
 | `GET /admin/products` | name, SKU, variation SKUs | `name` (default), `sku`, `price` (lowest active price), `stock`, `updated` | `category` (slug, includes subcategories), `type` (`simple`/`variable`), `stockStatus`, `status` (omitted = published + draft; archived only when asked for), `pricing` (`missing` = no store-currency price on the product or an enabled variation, so not purchasable; `set` = fully priced) |
 | `GET /admin/categories` | name, slug, description | `path` (default, tree order), `name`, `products` | `status` (`active`/`hidden`) |
 | `GET /admin/orders` · `GET /customer/orders` | order number, customer name | `placed` (default, desc), `number`, `customer`, `total`, `status` | `status`, `paymentStatus`, `customerId` (admin), `deliveryRouteId`, `orderType` (`first` / `repeat` / `walk_in`, admin), `from`/`to` (placement date). Admin rows carry the derived `orderType`: `repeat` when the customer has an earlier non-cancelled order, else `first`; `walk_in` without an account |
-| `GET /admin/customers` | company, contact, email, phone, legacy ID | `company` (default), `registered`, `status`, `group`, `orders`, `spend` | `status`, `groupId`, `prefecture`, `hasOrders`, `from`/`to` (registration date) — items are `CustomerListItem` (adds `groupName`, `orderCount`, `totalSpend`, `lastOrderAt`) |
+| `GET /admin/customers` | company, contact, email, phone, legacy ID | `company` (default), `registered`, `status`, `group`, `orders`, `spend` | `status`, `groupId`, `prefecture`, `hasOrders`, `pendingFirst` (pending customers first, then the requested sort; All Requests page), `from`/`to` (registration date) — items are `CustomerListItem` (adds `groupName`, `orderCount`, `totalSpend`, `lastOrderAt`) |
 | `GET /admin/customer-groups` | name, description, id | `name` (default), `customers` | — (items include `customerCount`) |
 | `GET /admin/price-rules` | rule name, customer/group name, product/category name, id | `audience` (default, precedence order), `name`, `target`, `priority`, `updated` | `audienceType`, `targetType`, `status`, `withConflicts` (items include `audienceName`, `targetName`, `conflicts`) |
 | `GET /admin/quantity-rules` | rule name, product/category name, id | `target` (default), `name`, `priority`, `updated` | `targetType`, `status` (items include `targetName`, `conflicts`) |
@@ -230,6 +232,20 @@ Public responses **never include `basePrice`** or any other price. Customers get
 
 ---
 
+### Admin notifications
+
+`GET /admin/notifications?limit=` → `AdminNotificationFeed` (`src/lib/types/notifications.ts`): `items` (newest first: new orders, registration requests, low or out-of-stock products, contact messages), `total`, `unread` (bell), `openOrders` (orders not yet `delivered` or `cancelled`, Orders badge), `pendingRegistrations` (customers at `pending`, All Requests badge). The badges count work waiting and only drop when it is handled; reading a notification does not change them. `POST /admin/notifications/{id}/read` · `POST /admin/notifications/read-all`: store read marks per staff user (the demo shares one set in memory). The frontend refreshes about once a minute; push updates can replace that.
+
+### Contact form (public)
+
+`POST /contact` with `ContactMessageInput` (`src/lib/types/content.ts`): `name` (2–120), `company?`, `email`, `phone?` (Japanese number), `topic` (`general` / `products` / `account` / `orders` / `other`), `message` (10–2000). `422` with field errors, same rules as `src/lib/validation/contact.ts`. The backend stores the message, emails the team (with a queue and retries), and must add rate limiting and bot protection; the frontend also has a hidden spam-trap field. The demo keeps messages in server memory and sends nothing; staff see them in the notification bell, and there is no inbox screen yet.
+
+### Journal (public)
+
+`GET /posts?excludeSlug=&limit=` → published `BlogPostSummary[]`, newest first (`posts.list()`) · `GET /posts/{slug}` → `BlogPost` or 404 for missing or unpublished posts (`posts.getBySlug()`). Types in [`src/lib/types/content.ts`](../src/lib/types/content.ts). `bodyHtml` is sanitized again by the frontend (allowlist, no attributes or links). The demo has three sample articles and no editor; admin writing and publishing come with the CMS.
+
+---
+
 ## 4. Customer portal (role `customer`)
 
 All endpoints act on the caller's own customer record, derived from the token. They never take a `customerId` parameter.
@@ -250,6 +266,7 @@ Unless marked *any status*, the account must be `approved` (otherwise `403 accou
 | GET | `/customer/orders/{id}` | Own order (404 if not theirs) | `orders.getById()` |
 | GET | `/customer/cart` | Current cart, re-priced | `cart.get()` |
 | POST | `/customer/cart/items` | Add lines (`{ lines: CartLineInput[] }`; also used by reorder) | `cart.add()` |
+| GET | `/customer/price-bounds` | Lowest and highest price this approved customer can buy publicly listed products at (quantity 1), `{ min, max }` or `null`, for the shop's price slider. Never for guests or applicants | `pricing.priceBounds()` |
 | GET | `/customer/quick-order?q=&category=&productIds=&page=` | Quick order sheet: published products sorted by name, 20 products per page, one `QuickOrderLine` per orderable option (simple product or active variation) priced for the customer at its minimum quantity, with stock, min/max/step and `error` when it can't be ordered; `QuickOrderPage` = `{ lines, page, totalPages, totalProducts }`. Prices only for approved customers. Adding uses `POST /customer/cart/items` | `cart.quickOrder()` |
 | PATCH | `/customer/cart/items/{lineId}` | Change quantity (0 removes) | `cart.setQuantity()` |
 | DELETE | `/customer/cart/items/{lineId}` | Remove line | `cart.remove()` |
@@ -1096,3 +1113,7 @@ The backend replaces this with a database.
   exactly (integer paisa or DECIMAL).
 - VAT classes and real rates for the catalogue (the `standard` / `reduced` / `exempt` keys and all demo rates are placeholders).
 - Migrating customers, orders and products from the current store. The ID strategy decides whether old IDs are kept.
+
+## Company settings, media and website content
+
+Added in the white-label and CMS batches. Company settings: `GET|PUT /api/v1/company` → `CompanySettings` (`src/lib/types/company.ts`); rules in `src/lib/validation/company.ts`; see `docs/WHITE-LABEL-ARCHITECTURE.md`. `settings.getStore()` is now a read-only view of those settings; `updateStore` was removed. Pages, posts, media, menus and homepage content: see `docs/CMS-AND-CONTENT-MANAGEMENT.md`.

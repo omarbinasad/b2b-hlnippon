@@ -20,11 +20,10 @@
  *   the method listed first). Local pickup is offered alongside, never chosen automatically.
  */
 import type { ClassAdjustment, FieldErrors, ID, RateTier, ShippingAddress, ShippingMethod, ShippingZone, ShippingZoneInput, ZoneLocation } from "@/lib/types";
-import { AMOUNT_RULE, fromMinor, isValidAmount, toMinor } from "../orders/calc.ts";
+import { amountRule, fromMinor, isValidAmount, toMinor } from "../orders/calc.ts";
 
-import { isPostcode, postcodeKey } from "../customers/contact.ts";
-import { JP_PREFECTURES as PREFECTURE_NAMES } from "../locations.ts";
-export { PREFECTURE_NAMES };
+import { isPostcode, postcodeError, postcodeKey } from "../customers/contact.ts";
+import { addressLabels, isKnownRegion } from "../locations.ts";
 
 const norm = (s?: string) => (s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
@@ -230,10 +229,10 @@ function validateTiers(tiers: RateTier[], prefix: string, unit: "grams" | "curre
   tiers.forEach((t, i) => {
     const p = `${prefix}.tiers.${i}`;
     const fromOk = unit === "grams" ? Number.isInteger(t.from) && t.from >= 0 && t.from <= SHIPPING_LIMITS.maxGrams : isValidAmount(t.from) && t.from <= SHIPPING_LIMITS.maxSubtotal;
-    if (!fromOk) errors[`${p}.from`] = unit === "grams" ? "Enter a weight of 0 or more (up to 3 decimals in kg)." : `Enter an amount of 0 or more (${AMOUNT_RULE}).`;
+    if (!fromOk) errors[`${p}.from`] = unit === "grams" ? "Enter a weight of 0 or more (up to 3 decimals in kg)." : `Enter an amount of 0 or more (${amountRule()}).`;
     else if (i === 0 && t.from !== 0) errors[`${p}.from`] = "The first tier must start at 0 so every cart is covered.";
     else if (i > 0 && t.from <= tiers[i - 1].from) errors[`${p}.from`] = "Each tier must start above the previous one (no overlaps).";
-    if (!isValidAmount(t.cost)) errors[`${p}.cost`] = `Enter a charge of 0 or more (${AMOUNT_RULE}).`;
+    if (!isValidAmount(t.cost)) errors[`${p}.cost`] = `Enter a charge of 0 or more (${amountRule()}).`;
   });
 }
 
@@ -242,7 +241,7 @@ export function validateMethod(m: ShippingMethod, index: number, classIds: ID[])
   const p = `methods.${index}`;
   if (!m.name.trim()) errors[`${p}.name`] = "Name the method (shown to staff and on orders).";
   else if (m.name.length > SHIPPING_LIMITS.name) errors[`${p}.name`] = "Too long.";
-  if ((m.type === "flat_rate" || m.type === "local_pickup") && !isValidAmount(m.cost)) errors[`${p}.cost`] = `Enter a charge of 0 or more (${AMOUNT_RULE}).`;
+  if ((m.type === "flat_rate" || m.type === "local_pickup") && !isValidAmount(m.cost)) errors[`${p}.cost`] = `Enter a charge of 0 or more (${amountRule()}).`;
   if (m.type === "free_shipping" && !(isValidAmount(m.minSubtotal) && m.minSubtotal > 0)) errors[`${p}.minSubtotal`] = "Enter a minimum subtotal above 0.";
   if (m.type === "weight_tiers") validateTiers(m.tiers, p, "grams", errors);
   if (m.type === "subtotal_tiers") validateTiers(m.tiers, p, "currency", errors);
@@ -280,9 +279,9 @@ export function validateZone(input: ShippingZoneInput, opts: { isFallback: boole
   input.locations.forEach((l, i) => {
     const k = `locations.${i}`;
     if (l.type === "postcode") {
-      if (!isPostcode(l.postalCode)) return void (errors[k] = "Use a 7-digit postcode, e.g. 160-0023.");
+      if (!isPostcode(l.postalCode)) return void (errors[k] = postcodeError());
     } else {
-      if (!PREFECTURE_NAMES.some((d) => norm(d) === norm(l.prefecture))) return void (errors[k] = "Choose a prefecture.");
+      if (!isKnownRegion(l.prefecture)) return void (errors[k] = `Choose a ${addressLabels().region.toLowerCase()}.`);
       if (l.type === "city" && !l.city.trim()) return void (errors[k] = "Enter the city.");
     }
     const key = locationKey(l);

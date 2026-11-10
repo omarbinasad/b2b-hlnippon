@@ -1,5 +1,6 @@
 "use client";
 
+import { Select } from "@/components/ui/select";
 import Link from "next/link";
 import { useState, useTransition, type ReactNode } from "react";
 import { createBrandAction, quickCreateCategoryAction } from "@/app/admin/products/actions";
@@ -158,10 +159,10 @@ export function CategoriesPanel({ draft, update, errors, categories }: SectionPr
         extra={
           <div>
             <label htmlFor="new-category-parent" className="mb-1 block text-xs font-medium text-muted">Parent category</label>
-            <select id="new-category-parent" value={parentId} onChange={(e) => setParentId(e.target.value)} className="h-9 w-full rounded-ui border border-line bg-surface px-2 text-sm">
+            <Select id="new-category-parent" value={parentId} onChange={(e) => setParentId(e.target.value)} className="h-9">
               <option value="">None (top level)</option>
               {ordered.map((c) => <option key={c.id} value={c.id}>{c.path}</option>)}
-            </select>
+            </Select>
           </div>
         }
       />
@@ -255,7 +256,7 @@ export function OriginPanel({ draft, update, errors }: SectionProps) {
         path="originCountry"
         label="Country"
         errors={errors}
-        hint={`Where the product comes from, e.g. Japan for imported items. The store itself is based in ${store}.`}
+        hint={`Where the product comes from. The store itself is based in ${store}.`}
         value={draft.originCountry}
         onChange={(originCountry) => update({ originCountry })}
       >

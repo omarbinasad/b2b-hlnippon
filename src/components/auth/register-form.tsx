@@ -1,10 +1,11 @@
 "use client";
 
+import { addressLabels, postcodeFieldLabel, regionFieldLabel } from "@/lib/locations";
 import { useState, useTransition } from "react";
 import { registerAction } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
-import { JP_PREFECTURES, prefectureLabel } from "@/lib/locations";
+import { RegionField } from "@/components/ui/region-field";
 import type { FieldErrors } from "@/lib/types";
 import { DOCUMENT_KINDS } from "@/lib/validation/documents";
 import { BUSINESS_TYPES } from "@/lib/validation/registration";
@@ -76,18 +77,15 @@ export function RegisterForm() {
       <fieldset className="space-y-4 border-t border-line pt-4">
         <legend className="pt-4 text-sm font-semibold">Business address</legend>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field id="rg-address-postalCode" label="(〒) Postcode / 郵便番号" required hint="7 digits, e.g. 160-0023" error={err("address.postalCode")}>
+          <Field id="rg-address-postalCode" label={postcodeFieldLabel()} required hint={addressLabels().cityLocal ? "7 digits, e.g. 160-0023" : undefined} error={err("address.postalCode")}>
             <Input id="rg-address-postalCode" value={address.postalCode} onChange={setAddr("postalCode")} maxLength={8} inputMode="numeric" autoComplete="postal-code" placeholder="1000000" {...aria("address.postalCode")} />
           </Field>
-          <Field id="rg-address-prefecture" label="Prefecture / 都道府県" required error={err("address.prefecture")}>
-            <Select id="rg-address-prefecture" value={address.prefecture} onChange={setAddr("prefecture")} autoComplete="address-level1" {...aria("address.prefecture")}>
-              <option value="" disabled>Select…</option>
-              {JP_PREFECTURES.map((p) => <option key={p} value={p}>{prefectureLabel(p)}</option>)}
-            </Select>
+          <Field id="rg-address-prefecture" label={regionFieldLabel()} required error={err("address.prefecture")}>
+            <RegionField id="rg-address-prefecture" value={address.prefecture} onChange={setAddr("prefecture")} autoComplete="address-level1" {...aria("address.prefecture")} />
           </Field>
         </div>
-        <Field id="rg-address-city" label="Town, City / 市区町村" required error={err("address.city")}>
-          <Input id="rg-address-city" value={address.city} onChange={setAddr("city")} maxLength={100} autoComplete="address-level2" placeholder="Shinjuku-ku" {...aria("address.city")} />
+        <Field id="rg-address-city" label={addressLabels().cityLocal ? `Town, City / ${addressLabels().cityLocal}` : "City"} required error={err("address.city")}>
+          <Input id="rg-address-city" value={address.city} onChange={setAddr("city")} maxLength={100} autoComplete="address-level2" placeholder={addressLabels().cityLocal ? "Shinjuku-ku" : undefined} {...aria("address.city")} />
         </Field>
         <Field id="rg-address-addressLine1" label="Street address" required hint="Town, block and building, e.g. 1-2-3 Nishi-Shinjuku, Sample Bldg 4F" error={err("address.addressLine1")}>
           <Input id="rg-address-addressLine1" value={address.addressLine1} onChange={setAddr("addressLine1")} maxLength={200} autoComplete="address-line1" {...aria("address.addressLine1")} />
@@ -96,7 +94,7 @@ export function RegisterForm() {
 
       <fieldset className="space-y-4 border-t border-line pt-4">
         <legend className="pt-4 text-sm font-semibold">Documents</legend>
-        <p className="text-xs text-muted">Optional. A copy of your Japan Residence Card (both sides) and your business license helps us review your application faster. Only our staff can see these files.</p>
+        <p className="text-xs text-muted">Optional. A copy of an identity document and your business license helps us review your application faster. Only our staff can see these files.</p>
         <div className="grid gap-4 sm:grid-cols-2">
           {(Object.keys(DOCUMENT_KINDS) as DocKind[]).map((kind) => (
             <DocumentField

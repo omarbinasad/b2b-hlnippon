@@ -1,16 +1,23 @@
 "use client";
 
+import { addressLabels, regionNames } from "@/lib/locations";
 import { useState, useTransition } from "react";
 import { saveZoneAction } from "@/app/admin/shipping/actions";
+import { testDraftZoneAction } from "@/app/admin/shipping/extras-actions";
+import { cx } from "@/lib/cx";
+import { formatMoney } from "@/lib/format";
+import type { RuledQuote } from "@/lib/shipping/rules";
+import type { PickupLocation } from "@/lib/types";
+import Link from "next/link";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field, Input, Select } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icons";
 import { siteConfig } from "@/config/site";
-import { JP_PREFECTURES } from "@/lib/locations";
+import { RegionField } from "@/components/ui/region-field";
 import { methodTypeLabel, validateZone } from "@/lib/shipping/engine";
 import type { ClassAdjustment, FieldErrors, ShippingClass, ShippingMethod, ShippingZone, ZoneLocation } from "@/lib/types";
-import { AMOUNT_STEP } from "@/lib/orders/calc";
+import { amountStep } from "@/lib/orders/calc";
 
 /* Drafts keep typed strings; they are converted (kg → grams, text → numbers) on save. */
 type LocationDraft = { key: string; type: ZoneLocation["type"]; prefecture: string; city: string; postalCode: string };
@@ -25,6 +32,7 @@ type MethodDraft = {
   cost: string;
   minSubtotal: string;
   instructions: string;
+  locationId: string;
   tiers: TierDraft[];
   adjustments: AdjDraft[];
 };
@@ -52,6 +60,7 @@ function toMethodDraft(m: ShippingMethod): MethodDraft {
     cost: "cost" in m ? String(m.cost) : "0",
     minSubtotal: m.type === "free_shipping" ? String(m.minSubtotal) : "",
     instructions: m.type === "local_pickup" ? (m.instructions ?? "") : "",
+    locationId: m.type === "local_pickup" ? (m.locationId ?? "") : "",
     tiers: "tiers" in m ? m.tiers.map((t) => ({ key: k(), from: String(weight ? t.from / 1000 : t.from), cost: String(t.cost) })) : [{ key: k(), from: "0", cost: "" }],
     adjustments: "classAdjustments" in m ? m.classAdjustments.map((a) => ({ key: k(), shippingClassId: a.shippingClassId, amount: String(a.amount), per: a.per })) : [],
   };
@@ -66,6 +75,7 @@ const newMethod = (type: ShippingMethod["type"]): MethodDraft => ({
   cost: type === "local_pickup" ? "0" : "",
   minSubtotal: "",
   instructions: "",
+  locationId: "",
   tiers: [{ key: k(), from: "0", cost: "" }],
   adjustments: [],
 });
@@ -89,14 +99,22 @@ function fromMethodDraft(m: MethodDraft): ShippingMethod {
     case "free_shipping":
       return { ...base, type: m.type, minSubtotal: n(m.minSubtotal) };
     case "local_pickup":
-      return { ...base, type: m.type, cost: n(m.cost), instructions: m.instructions.trim() || undefined };
+      return { ...base, type: m.type, cost: n(m.cost), instructions: m.instructions.trim() || undefined, locationId: m.locationId || undefined };
   }
 }
 
-export function ZoneForm({ zone, others, classes }: { zone?: ShippingZone; others: ShippingZone[]; classes: ShippingClass[] }) {
+const WIZARD_STEPS = ["Zone name", "Locations", "Shipping methods", "Conditions", "Test the charge", "Review and save"];
+
+export function ZoneForm({ zone, others, classes, pickups = [], guided = false }: { zone?: ShippingZone; others: ShippingZone[]; classes: ShippingClass[]; pickups?: PickupLocation[]; /** Step-by-step setup for a new zone. */ guided?: boolean }) {
+  const [step, setStep] = useState(0);
+  const [test, setTest] = useState({ prefecture: "", city: "", postalCode: "", kg: "5", subtotal: "10000" });
+  const [testResult, setTestResult] = useState<RuledQuote | null>(null);
+  const [testing, startTest] = useTransition();
+  const show = (n: number) => !guided || step === n;
+  const draftInput = () => ({ name, locations: locations.map(fromLocationDraft), methods: methods.map(fromMethodDraft) });
   const isFallback = zone?.isFallback ?? false;
   const [name, setName] = useState(zone?.name ?? "");
-  const [locations, setLocations] = useState<LocationDraft[]>(zone ? zone.locations.map(toLocationDraft) : [{ key: k(), type: "city", prefecture: "Tokyo", city: "", postalCode: "" }]);
+  const [locations, setLocations] = useState<LocationDraft[]>(zone ? zone.locations.map(toLocationDraft) : [{ key: k(), type: "city", prefecture: regionNames()[0] ?? "", city: "", postalCode: "" }]);
   const [methods, setMethods] = useState<MethodDraft[]>(zone ? zone.methods.map(toMethodDraft) : [newMethod("flat_rate")]);
   const [addType, setAddType] = useState<ShippingMethod["type"]>("flat_rate");
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -140,15 +158,26 @@ export function ZoneForm({ zone, others, classes }: { zone?: ShippingZone; other
         e.preventDefault();
         submit();
       }}
-      className="space-y-6"
+      className="min-w-0 space-y-6"
     >
-      <Card title="Zone">
+      {guided && (
+        <ol aria-label="Setup steps" className="scrollbar-none flex gap-1 overflow-x-auto">
+          {WIZARD_STEPS.map((t, i) => (
+            <li key={t} className="shrink-0">
+              <button type="button" aria-current={i === step ? "step" : undefined} onClick={() => setStep(i)} className={cx("flex items-center gap-2 rounded-ui px-3 py-2 text-sm whitespace-nowrap", i === step ? "bg-brand-soft font-medium text-brand" : "text-muted hover:bg-surface-muted")}>
+                <span className="grid size-6 place-items-center rounded-full border border-current text-xs">{i + 1}</span> {t}
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+      <div hidden={!show(0)}><Card title="Zone">
         <Field id="zone-name" label="Name" required error={errors.name}>
           <Input id="zone-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} aria-invalid={Boolean(errors.name)} aria-describedby={errors.name ? "zone-name-error" : undefined} />
         </Field>
-      </Card>
+      </Card></div>
 
-      <Card
+      <div hidden={!show(1)}><Card
         title="Covers"
         description={
           isFallback
@@ -165,18 +194,15 @@ export function ZoneForm({ zone, others, classes }: { zone?: ShippingZone; other
                   <div>
                     <label htmlFor={`loc-${l.key}-type`} className="block text-xs font-medium">Match by</label>
                     <Select id={`loc-${l.key}-type`} value={l.type} onChange={(e) => updateLoc(l.key, { type: e.target.value as ZoneLocation["type"] })}>
-                      <option value="prefecture">Prefecture</option>
+                      <option value="prefecture">{addressLabels().region}</option>
                       <option value="city">City</option>
-                      <option value="postcode">Postcode</option>
+                      <option value="postcode">{addressLabels().postcode}</option>
                     </Select>
                   </div>
                   {l.type !== "postcode" ? (
                     <div>
-                      <label htmlFor={`loc-${l.key}-prefecture`} className="block text-xs font-medium">Prefecture</label>
-                      <Select id={`loc-${l.key}-prefecture`} value={l.prefecture} onChange={(e) => updateLoc(l.key, { prefecture: e.target.value })}>
-                        <option value="">Choose…</option>
-                        {JP_PREFECTURES.map((d) => <option key={d} value={d}>{d}</option>)}
-                      </Select>
+                      <label htmlFor={`loc-${l.key}-prefecture`} className="block text-xs font-medium">{addressLabels().region}</label>
+                      <RegionField id={`loc-${l.key}-prefecture`} value={l.prefecture} onChange={(e) => updateLoc(l.key, { prefecture: e.target.value })} />
                     </div>
                   ) : (
                     <div>
@@ -199,7 +225,7 @@ export function ZoneForm({ zone, others, classes }: { zone?: ShippingZone; other
                 {errors[`locations.${i}`] && <p className="mt-1.5 text-xs text-danger">{errors[`locations.${i}`]}</p>}
               </div>
             ))}
-            <Button variant="secondary" size="sm" onClick={() => setLocations((ls) => [...ls, { key: k(), type: "city", prefecture: "Tokyo", city: "", postalCode: "" }])}>
+            <Button variant="secondary" size="sm" onClick={() => setLocations((ls) => [...ls, { key: k(), type: "city", prefecture: regionNames()[0] ?? "", city: "", postalCode: "" }])}>
               <Icon name="plus" className="size-4" /> Add location
             </Button>
             <p className="text-xs text-muted">
@@ -207,9 +233,9 @@ export function ZoneForm({ zone, others, classes }: { zone?: ShippingZone; other
             </p>
           </div>
         )}
-      </Card>
+      </Card></div>
 
-      <Card title="Shipping methods" description="Order matters only to break ties: when two delivery methods cost the same, the one listed first is suggested.">
+      <div hidden={!show(2)}><Card title="Shipping methods" description="Order matters only to break ties: when two delivery methods cost the same, the one listed first is suggested.">
         <div className="space-y-4">
           {errors.methods && <p className="text-xs text-danger">{errors.methods}</p>}
           {methods.map((m, i) => {
@@ -238,8 +264,16 @@ export function ZoneForm({ zone, others, classes }: { zone?: ShippingZone; other
                 {(m.type === "flat_rate" || m.type === "local_pickup") && (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Field id={p("cost")} label={`${m.type === "local_pickup" ? "Pickup charge" : "Charge per order"} (${cur})`} required error={e("cost")}>
-                      <Input id={p("cost")} type="number" inputMode="decimal" min={0} step={AMOUNT_STEP} value={m.cost} onChange={(ev) => updateMethod(m.key, { cost: ev.target.value })} />
+                      <Input id={p("cost")} type="number" inputMode="decimal" min={0} step={amountStep()} value={m.cost} onChange={(ev) => updateMethod(m.key, { cost: ev.target.value })} />
                     </Field>
+                    {m.type === "local_pickup" && pickups.length > 0 && (
+                      <Field id={p("location")} label="Pickup location">
+                        <Select id={p("location")} value={m.locationId} onChange={(ev) => updateMethod(m.key, { locationId: ev.target.value })}>
+                          <option value="">None</option>
+                          {pickups.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                        </Select>
+                      </Field>
+                    )}
                     {m.type === "local_pickup" && (
                       <Field id={p("instructions")} label="Pickup instructions">
                         <Input id={p("instructions")} value={m.instructions} onChange={(ev) => updateMethod(m.key, { instructions: ev.target.value })} maxLength={300} />
@@ -250,7 +284,7 @@ export function ZoneForm({ zone, others, classes }: { zone?: ShippingZone; other
 
                 {m.type === "free_shipping" && (
                   <Field id={p("min")} label={`Free when the items subtotal is at least (${cur})`} required error={e("minSubtotal")}>
-                    <Input id={p("min")} type="number" inputMode="decimal" min={0} step={AMOUNT_STEP} value={m.minSubtotal} onChange={(ev) => updateMethod(m.key, { minSubtotal: ev.target.value })} className="sm:w-48" />
+                    <Input id={p("min")} type="number" inputMode="decimal" min={0} step={amountStep()} value={m.minSubtotal} onChange={(ev) => updateMethod(m.key, { minSubtotal: ev.target.value })} className="sm:w-48" />
                   </Field>
                 )}
 
@@ -284,7 +318,7 @@ export function ZoneForm({ zone, others, classes }: { zone?: ShippingZone; other
                               type="number"
                               inputMode="decimal"
                               min={0}
-                              step={AMOUNT_STEP}
+                              step={amountStep()}
                               value={t.cost}
                               onChange={(ev) => updateMethod(m.key, { tiers: m.tiers.map((x) => (x.key === t.key ? { ...x, cost: ev.target.value } : x)) })}
                               className="w-32"
@@ -318,7 +352,7 @@ export function ZoneForm({ zone, others, classes }: { zone?: ShippingZone; other
                             <option value="">Choose class…</option>
                             {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </Select>
-                          <Input aria-label={`Amount (${cur})`} type="number" inputMode="decimal" min={0} step={AMOUNT_STEP} value={a.amount} onChange={(ev) => updateMethod(m.key, { adjustments: m.adjustments.map((x) => (x.key === a.key ? { ...x, amount: ev.target.value } : x)) })} className="w-28" placeholder={cur} />
+                          <Input aria-label={`Amount (${cur})`} type="number" inputMode="decimal" min={0} step={amountStep()} value={a.amount} onChange={(ev) => updateMethod(m.key, { adjustments: m.adjustments.map((x) => (x.key === a.key ? { ...x, amount: ev.target.value } : x)) })} className="w-28" placeholder={cur} />
                           <Select aria-label="Charged" value={a.per} onChange={(ev) => updateMethod(m.key, { adjustments: m.adjustments.map((x) => (x.key === a.key ? { ...x, per: ev.target.value as AdjDraft["per"] } : x)) })} className="w-36">
                             <option value="order">per order</option>
                             <option value="unit">per unit</option>
@@ -350,12 +384,50 @@ export function ZoneForm({ zone, others, classes }: { zone?: ShippingZone; other
             </Button>
           </div>
         </div>
-      </Card>
+      </Card></div>
 
       <p role="alert" className="text-sm text-danger">{message}</p>
+      {guided && step === 3 && (
+        <Card title="Conditions" description="Most zones don't need any.">
+          <p className="text-sm text-muted">Conditional rules change the charge by weight, subtotal, location, customer group or coupon, in every zone or just some. Create the zone first, then add rules for it.</p>
+          <Link href="/admin/shipping/rules" target="_blank" className="mt-3 inline-block text-sm font-medium text-brand hover:underline">See conditional rules ↗</Link>
+        </Card>
+      )}
+      {guided && step === 4 && (
+        <Card title="Test the charge" description="Try an address and cart against this zone before saving.">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field id="zt-kg" label="Cart weight (kg)"><Input id="zt-kg" type="number" min={0} step="any" value={test.kg} onChange={(e) => setTest({ ...test, kg: e.target.value })} /></Field>
+            <Field id="zt-sub" label={`Subtotal (${cur})`}><Input id="zt-sub" type="number" min={0} value={test.subtotal} onChange={(e) => setTest({ ...test, subtotal: e.target.value })} /></Field>
+            <Field id="zt-region" label={addressLabels().region}><RegionField id="zt-region" value={test.prefecture} onChange={(e) => setTest({ ...test, prefecture: e.target.value })} /></Field>
+            <Field id="zt-city" label="City"><Input id="zt-city" value={test.city} onChange={(e) => setTest({ ...test, city: e.target.value })} /></Field>
+          </div>
+          <Button variant="secondary" className="mt-3" disabled={testing} onClick={() => startTest(async () => setTestResult(await testDraftZoneAction(draftInput(), { address: test, grams: Number(test.kg) * 1000, subtotal: Number(test.subtotal) })))}>Calculate</Button>
+          {testResult && (
+            <div className="mt-3 rounded-ui border border-line p-3 text-sm" aria-live="polite">
+              <p className="font-medium">{testResult.match.zone ? (testResult.selected ? `${testResult.selected.method.name}: ${formatMoney(testResult.selected.cost!)}` : "No method is available for this cart.") : "This address is outside the zone."}</p>
+              <p className="mt-1 text-xs text-muted">{testResult.explanation}</p>
+            </div>
+          )}
+        </Card>
+      )}
+      {guided && step === 5 && (
+        <Card title="Review">
+          <dl className="space-y-2 text-sm">
+            <div><dt className="text-muted">Name</dt><dd>{name || "Not set"}</dd></div>
+            <div><dt className="text-muted">Locations</dt><dd>{locations.length}</dd></div>
+            <div><dt className="text-muted">Methods</dt><dd>{methods.map((m) => m.name || "Unnamed").join(", ") || "None"}</dd></div>
+          </dl>
+          {Object.keys(errors).length > 0 && <p role="alert" className="mt-3 text-sm text-danger">Some fields need attention. Go back to the marked step.</p>}
+        </Card>
+      )}
       <div className="flex flex-wrap justify-end gap-2">
         <ButtonLink href="/admin/shipping" variant="secondary">Cancel</ButtonLink>
-        <Button type="submit" disabled={pending}>{pending ? "Saving…" : zone ? "Save zone" : "Create zone"}</Button>
+        {guided && step > 0 && <Button variant="secondary" onClick={() => setStep(step - 1)}>Back</Button>}
+        {guided && step < WIZARD_STEPS.length - 1 ? (
+          <Button onClick={() => setStep(step + 1)}>Continue</Button>
+        ) : (
+          <Button type="submit" disabled={pending}>{pending ? "Saving…" : zone ? "Save zone" : "Create zone"}</Button>
+        )}
       </div>
     </form>
   );

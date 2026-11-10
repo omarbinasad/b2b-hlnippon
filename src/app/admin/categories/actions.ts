@@ -2,11 +2,12 @@
 
 /*
  * Admin category mutations. DEMO: kept in server memory only.
- * TODO(auth): verify the caller is an admin before any mutation.
+ * TODO(auth): the permission is mocked; the backend must authorize every call.
  */
 import type { Route } from "next";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { actorWith } from "@/lib/auth/session";
 import { repositories } from "@/lib/data";
 import type { CategoryInput, FieldErrors } from "@/lib/types";
 
@@ -34,6 +35,7 @@ function toCategoryInput(raw: unknown): CategoryInput {
 
 /** Returns field errors, or redirects to the list on success. */
 export async function saveCategoryAction(id: string | null, raw: CategoryInput): Promise<SaveCategoryState> {
+  if (!(await actorWith("products.edit"))) return { ok: false, errors: {}, message: "You don't have permission to do this." };
   const input = toCategoryInput(raw);
   const result = id ? await repositories.categories.update(id, input) : await repositories.categories.create(input);
   if (!result.ok) return { ok: false, errors: result.errors, message: result.message ?? "The category could not be saved." };
@@ -47,6 +49,7 @@ export async function assignCategoryProductsAction(
   categoryId: string,
   change: { add?: string[]; remove?: string[] },
 ): Promise<{ ok: boolean; message: string }> {
+  if (!(await actorWith("products.edit"))) return { ok: false, message: "You don't have permission to do this." };
   const clean = (v: unknown) => (Array.isArray(v) ? v.slice(0, 50).filter((x): x is string => typeof x === "string") : []);
   const result = await repositories.categories.assignProducts(str(categoryId, 100), { add: clean(change?.add), remove: clean(change?.remove) });
   if (!result.ok) return { ok: false, message: result.message ?? "Could not update the category." };

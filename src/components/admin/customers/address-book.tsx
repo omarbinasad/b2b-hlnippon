@@ -1,14 +1,14 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { deleteAddressAction, saveAddressAction } from "@/app/admin/customers/actions";
+import { deleteAddressAction, saveAddressAction, lookupPostcodeAction } from "@/app/admin/customers/actions";
 import { AddressBlock } from "@/components/order/order-details";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/feedback";
 import type { Address, AddressInput } from "@/lib/types";
-import { AddressForm } from "./address-form";
+import { AddressForm } from "@/components/customers/address-form";
 
 /** Multiple delivery and billing addresses; one default per type. */
 export function AddressBook({ customerId, addresses, defaults }: { customerId: string; addresses: Address[]; defaults: Partial<AddressInput> }) {
@@ -65,7 +65,8 @@ export function AddressBook({ customerId, addresses, defaults }: { customerId: s
       <Dialog open={editing !== null} onClose={() => setEditing(null)} title={editing === "new" ? "Add address" : "Edit address"} className="w-[min(40rem,calc(100vw-2rem))]">
         {editing && (
           <AddressForm
-            customerId={customerId}
+            save={(input) => saveAddressAction(customerId, input)}
+            lookup={lookupPostcodeAction}
             address={editing === "new" ? undefined : editing}
             defaults={defaults}
             onDone={() => {

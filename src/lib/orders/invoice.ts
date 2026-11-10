@@ -3,7 +3,21 @@
  * It is never rewritten: when the order changes afterwards a revision replaces it, and a cancelled order gets a
  * credit note. Numbers: "INV-<year>-<4-digit sequence>", revisions "<number>-R<n>", credit notes "<number>-CN".
  */
-import type { Invoice, InvoiceKind, InvoiceSnapshot, Order } from "@/lib/types";
+import type { CompanySettings, Invoice, InvoiceKind, InvoiceSeller, InvoiceSnapshot, Order, StoreSettings } from "@/lib/types";
+
+/** The seller as an invoice prints them, following the company's document settings. */
+export function invoiceSeller(settings: Pick<CompanySettings, "legalName" | "registrationNumber" | "taxNumber" | "documents">, store: Pick<StoreSettings, "storeName" | "address" | "phone" | "email">): InvoiceSeller {
+  const a = store.address;
+  const line = [a.area, a.city, a.postalCode].filter(Boolean).join(", ");
+  const contact = [store.phone, store.email].filter(Boolean).join(" · ");
+  return {
+    name: settings.legalName || store.storeName,
+    addressLines: [a.addressLine1, a.addressLine2, line].filter((x): x is string => !!x),
+    contact: contact || undefined,
+    registrationNumber: settings.documents.showRegistrationOnInvoice ? settings.registrationNumber || undefined : undefined,
+    taxNumber: settings.documents.showTaxNumberOnInvoice ? settings.taxNumber || undefined : undefined,
+  };
+}
 
 /** The order as an invoice shows it, frozen at issue time. */
 export function invoiceSnapshot(order: Order): InvoiceSnapshot {
@@ -19,6 +33,7 @@ export function invoiceSnapshot(order: Order): InvoiceSnapshot {
     fulfilment: order.fulfilment,
     requestedDeliveryDate: order.requestedDeliveryDate,
     items: order.items,
+    coupon: order.coupon,
     discount: order.discount ? { type: order.discount.type, value: order.discount.value } : undefined,
     shipping: { label: order.shipping.label, amount: order.shipping.amount },
     taxes: order.taxes,
@@ -60,8 +75,8 @@ export function nextInvoiceKind(order: Order): InvoiceKind | undefined {
 }
 
 /** Next base number for a year, after the highest existing "INV-<year>-NNNN" (revisions and credit notes share their base). */
-export function nextInvoiceNumber(existing: string[], year: number): string {
-  const prefix = `INV-${year}-`;
+export function nextInvoiceNumber(existing: string[], year: number, base = "INV"): string {
+  const prefix = `${base}-${year}-`;
   const max = Math.max(0, ...existing.filter((n) => n.startsWith(prefix)).map((n) => Number(n.slice(prefix.length, prefix.length + 4)) || 0));
   return `${prefix}${String(max + 1).padStart(4, "0")}`;
 }

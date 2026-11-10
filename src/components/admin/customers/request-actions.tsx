@@ -12,7 +12,8 @@ import type { AccountStatus } from "@/lib/types";
 
 /**
  * Approve / Decline buttons for one registration request (Decline = reject, with a reason kept in the approval
- * history). A declined request can be reopened. Same workflow and rules as the customer page's status panel.
+ * history). A declined request can be reopened; an approved or suspended account has no decision left to make here.
+ * Same workflow and rules as the customer page's status panel.
  */
 export function RequestActions({ customerId, companyName, status }: { customerId: string; companyName: string; status: AccountStatus }) {
   const router = useRouter();
@@ -32,6 +33,8 @@ export function RequestActions({ customerId, companyName, status }: { customerId
         router.refresh();
       } else setError(r.errors.reason ?? r.message);
     });
+
+  if (status === "approved" || status === "suspended") return null;
 
   if (status === "rejected") {
     return (

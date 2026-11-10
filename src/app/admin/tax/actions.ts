@@ -2,7 +2,7 @@
 
 /*
  * Tax settings, rates and preview. DEMO: kept in server memory with FICTIONAL rates.
- * TODO(auth): "tax.manage" is mocked — the backend must authorize every call and
+ * TODO(auth): "taxes.manage" is mocked — the backend must authorize every call and
  * perform the authoritative tax calculation.
  */
 import type { Route } from "next";
@@ -12,6 +12,7 @@ import { getAdminActor } from "@/lib/auth/session";
 import { repositories } from "@/lib/data";
 import type { TaxPreviewResult } from "@/lib/data/repositories";
 import type { FieldErrors, TaxClass, TaxLocation, TaxRateInput } from "@/lib/types";
+import { storeCountry } from "@/lib/locations";
 
 export type TaxActionResult = { ok: true } | { ok: false; errors: FieldErrors; message: string };
 
@@ -22,7 +23,7 @@ const cls = (v: unknown) => str(v, 40) as TaxClass;
 
 async function actor() {
   const a = await getAdminActor();
-  return a.permissions.includes("tax.manage") ? { id: a.id, name: a.name, role: a.role } : null;
+  return a.permissions.includes("taxes.manage") ? { id: a.id, name: a.name, role: a.role } : null;
 }
 const denied: TaxActionResult = { ok: false, errors: {}, message: "You don't have permission to manage tax (mock permissions)." };
 
@@ -49,7 +50,7 @@ function location(v: unknown): TaxLocation {
   if (l.type === "postcode") return { type: "postcode", postalCode: str(l.postalCode, 10) };
   if (l.type === "city") return { type: "city", prefecture: str(l.prefecture, 50), city: str(l.city, 100) };
   if (l.type === "prefecture") return { type: "prefecture", prefecture: str(l.prefecture, 50) };
-  return { type: "country", country: "JP" };
+  return { type: "country", country: storeCountry() };
 }
 
 export async function saveTaxRateAction(id: string | null, raw: unknown): Promise<TaxActionResult> {

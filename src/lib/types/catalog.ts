@@ -1,4 +1,5 @@
 import type { ID, ISODateString, Money, Weight } from "./common";
+import type { SiteImage } from "./content";
 
 /** Optional id of the record in a previous system, kept only to map migrated data (none in the sample data). */
 export interface LegacyRef {
@@ -24,6 +25,23 @@ export interface Brand extends LegacyRef {
   id: ID;
   slug: string;
   name: string;
+  /** Shown in the homepage brands section. Without one, the name is shown. */
+  logo?: SiteImage | null;
+  showOnHome?: boolean;
+  /** Lower comes first on the homepage. */
+  displayOrder?: number;
+}
+
+export interface BrandInput {
+  name: string;
+  logo: SiteImage | null;
+  showOnHome: boolean;
+  displayOrder: number;
+}
+
+/** Brand row for the admin brand list. */
+export interface AdminBrandRow extends Brand {
+  productCount: number;
 }
 
 export interface Tag extends LegacyRef {
@@ -51,6 +69,9 @@ export interface ShippingClass {
   id: ID;
   name: string;
   description?: string;
+  /** Added to the shipping charge when the cart has this class. */
+  surcharge?: Money;
+  surchargePer?: "order" | "unit";
 }
 
 /**
@@ -86,12 +107,28 @@ export interface StockInfo {
 }
 
 /** Where a stock change came from. */
-export type StockMovementSource = "product_edit" | "order_page" | "refund_restock";
+export type StockMovementSource = "product_edit" | "order_page" | "refund_restock" | "inventory_adjust";
 
 /**
  * One change to a product's (or option's) stock, kept as an audit trail. The backend owns stock and
  * must also record reservations and deductions when orders are placed — the demo does not deduct stock.
  */
+/** One stockable line on the inventory screen. */
+export interface InventoryRow {
+  productId: ID;
+  productName: string;
+  variationId?: ID;
+  variationLabel?: string;
+  sku: string;
+  stock: StockInfo;
+  /** "quantity" = counted; "status" = marked in or out of stock. */
+  mode: "quantity" | "status";
+  /** Options sharing the product's stock change together. */
+  shared: boolean;
+  lowStockThreshold?: number;
+  unavailable?: string;
+}
+
 export interface StockMovement {
   id: ID;
   productId: ID;

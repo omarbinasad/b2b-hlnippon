@@ -1,5 +1,6 @@
 "use client";
 
+import { useCan } from "@/components/admin/capabilities-context";
 import { useState, useTransition } from "react";
 import { createCustomerAction } from "@/app/admin/customers/actions";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import type { CustomerGroup, FieldErrors } from "@/lib/types";
 
 /** Essentials only — addresses, business details and route can be completed later. */
 export function QuickCustomerForm({ groups }: { groups: CustomerGroup[] }) {
+  const can = useCan();
   const [values, setValues] = useState({ companyName: "", contactName: "", phone: "", email: "", status: "pending" as "pending" | "approved", groupId: "" });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState("");
@@ -59,7 +61,7 @@ export function QuickCustomerForm({ groups }: { groups: CustomerGroup[] }) {
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
           {(["pending", "approved"] as const).map((s) => (
             <label key={s} className="flex cursor-pointer gap-3 rounded-ui border border-line p-3 has-checked:border-brand has-checked:bg-brand-soft">
-              <input type="radio" name="qc-status" value={s} checked={values.status === s} onChange={() => setValues((v) => ({ ...v, status: s }))} className="mt-0.5 accent-brand" />
+              <input type="radio" name="qc-status" value={s} disabled={s === "approved" && !can("customer_approval.approve")} checked={values.status === s} onChange={() => setValues((v) => ({ ...v, status: s }))} className="mt-0.5 accent-brand" />
               <span>
                 <span className="block text-sm font-medium">{accountStatusLabels[s]}</span>
                 <span className="block text-xs text-muted">{accountStatusHelp[s]}</span>

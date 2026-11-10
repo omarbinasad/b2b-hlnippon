@@ -12,14 +12,16 @@ import { mockOrders } from "./mock/orders";
 import { samplePostcodes } from "./mock/postcodes";
 import { matches, paginate, sortBy, withinDates, type SortKey } from "./mock-utils";
 import type { CustomerRepository, LocationRepository, SaveResult } from "./repositories";
+import { storeCountry } from "@/lib/locations";
 
 /*
  * DEMO STORE: customers and groups live in memory (globalThis) — edits survive
  * page refreshes but not a server restart. The same records back Admin Orders
  * (customer search, addresses, price lookups), so there is one customer source.
- * Customers are never deleted because orders reference them by id.
+ * A customer with an order can't be deleted, because orders reference them by id.
  */
 
+const DEMO_ACCOUNTS = ["cus-001", "cus-003"];
 const now = () => new Date().toISOString();
 const clone = <T>(v: T): T => structuredClone(v);
 const newId = (prefix: string) => `${prefix}-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -74,7 +76,7 @@ function duplicateOf(selfId: string | undefined, email?: string, phone?: string)
 }
 
 export const mockCustomerRepository: CustomerRepository = {
-  async list({ status, groupId, prefecture, hasOrders, search, from, to, sort = "company", dir, page, perPage } = {}) {
+  async list({ status, groupId, prefecture, hasOrders, pendingFirst, search, from, to, sort = "company", dir, page, perPage } = {}) {
     const stats = orderStats();
     const filtered = mockCustomers.filter(
       (c) =>
@@ -97,7 +99,18 @@ export const mockCustomerRepository: CustomerRepository = {
       }
     };
     const defaultDir = sort === "registered" || sort === "orders" || sort === "spend" ? "desc" : "asc";
-    return paginate(sortBy(items, key, dir ?? defaultDir), page, perPage);
+    const sorted = sortBy(items, key, dir ?? defaultDir);
+    return paginate(pendingFirst ? [...sorted.filter((c) => c.status === "pending"), ...sorted.filter((c) => c.status !== "pending")] : sorted, page, perPage);
+  },
+
+  async remove(id) {
+    const index = mockCustomers.findIndex((c) => c.id === id);
+    if (index < 0) return notFound;
+    if (mockOrders.some((o) => o.customerId === id)) return { ok: false, errors: {}, message: "This customer has orders, so they can't be deleted. Suspend the account instead." };
+    // The demo's own sign-in accounts have to stay, or the Demo view switcher would break.
+    if (DEMO_ACCOUNTS.includes(id)) return { ok: false, errors: {}, message: "This is the demo's sample account, so it can't be deleted." };
+    mockCustomers.splice(index, 1);
+    return { ok: true, value: { id } };
   },
 
   async getById(id) {
@@ -151,7 +164,7 @@ export const mockCustomerRepository: CustomerRepository = {
       isDefault: true,
       recipientName: input.contactName.trim(),
       companyName: input.companyName.trim(),
-      country: "JP",
+      country: storeCountry(),
       prefecture: input.address.prefecture.trim(),
       city: input.address.city.trim(),
       area: opt(input.address.area),
@@ -229,6 +242,14 @@ export const mockCustomerRepository: CustomerRepository = {
     });
   },
 
+  async updateProfile(id, input) {
+    const c = mockCustomers.find((x) => x.id === id);
+    if (!c) return { ok: false, errors: {} as Record<string, string>, message: "That account wasn't found." };
+    const dup = duplicateOf(id, input.email, input.phone);
+    if (dup) return { ok: false, errors: { email: "Another account uses this email or phone." }, message: "Some fields need attention." };
+    Object.assign(c, { companyName: input.companyName, contactName: input.contactName, email: input.email, phone: input.phone, remindersOptOut: input.remindersOptOut === true, updatedAt: now() });
+    return { ok: true, value: clone(c) };
+  },
   async setStatus(id, status, reason, actor) {
     const c = mockCustomers.find((x) => x.id === id);
     if (!c) return notFound;
@@ -258,7 +279,7 @@ export const mockCustomerRepository: CustomerRepository = {
       label: input.label.trim(),
       recipientName: input.recipientName.trim(),
       companyName: opt(input.companyName),
-      country: "JP",
+      country: storeCountry(),
       prefecture: input.prefecture,
       city: input.city.trim(),
       area: opt(input.area),

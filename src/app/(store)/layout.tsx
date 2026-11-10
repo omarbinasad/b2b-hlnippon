@@ -1,4 +1,5 @@
 import { DemoViewSwitcher } from "@/components/layout/demo-view-switcher";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { StoreFooter } from "@/components/layout/store-footer";
 import { StoreHeader } from "@/components/layout/store-header";
 
@@ -12,6 +13,7 @@ export default function StoreLayout({ children }: { children: React.ReactNode })
       </main>
       <StoreFooter />
       <DemoViewSwitcher />
+      <MobileBottomNav />
     </>
   );
 }

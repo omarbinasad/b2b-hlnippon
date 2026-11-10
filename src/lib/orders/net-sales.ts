@@ -1,5 +1,5 @@
 /**
- * Net sales = items after discounts, EXCLUDING tax, shipping and refunds of shipping.
+ * Net sales = items after discounts, EXCLUDING tax and shipping. Refunds aren't subtracted here.
  * Pure helpers used by the dashboard so tax-inclusive and tax-exclusive orders are
  * reported on the same basis. Only type imports, so `npm test` can load this file.
  *

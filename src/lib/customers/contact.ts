@@ -1,4 +1,5 @@
-/** Pure contact/address format checks (no imports, so they are unit-testable with Node directly). */
+/** Pure contact/address format checks, per store country. Unit-testable with Node directly. */
+import { company } from "../../config/runtime.ts";
 
 /**
  * Japanese phone number: domestic "0X…" with 10 digits (landline, e.g. 03-1234-5678) or 11 digits
@@ -12,16 +13,59 @@ export function isJpPhone(value: string) {
   return /^0[5789]0\d{8}$/.test(national) || /^0[1-9]\d{8}$/.test(national);
 }
 
-/** Japanese postcode (郵便番号): 7 digits, written "1000001" or "100-0001". Format only. */
-export const isPostcode = (v: string) => /^\d{3}-?\d{4}$/.test(v.trim());
+/** Any country: digits with optional +, spaces, dashes, brackets; 7 to 15 digits (E.164 length). */
+const isGenericPhone = (value: string) => /^[+\d][\d\s()-]*$/.test(value.trim()) && value.replace(/\D/g, "").length >= 7 && value.replace(/\D/g, "").length <= 15;
 
-/** Digits only, for comparing postcodes written with or without the hyphen. */
-export const postcodeKey = (v?: string) => (v ?? "").replace(/\D/g, "");
+interface CountryRules {
+  phone: (v: string) => boolean;
+  phoneError: string;
+  postcode: RegExp;
+  postcodeError: string;
+  /** Storage form from digits, when the country writes postcodes with a separator. */
+  formatPostcode?: (digits: string) => string | undefined;
+}
 
-/** "1000001" / "100-0001" → "100-0001" (display and storage form). */
-export const normalizePostcode = (v: string) => {
-  const d = v.replace(/\D/g, "");
-  return d.length === 7 ? `${d.slice(0, 3)}-${d.slice(3)}` : v.trim();
+const RULES: Record<string, CountryRules> = {
+  JP: {
+    phone: isJpPhone,
+    phoneError: "Use a Japanese phone number, e.g. 03-1234-5678 or 090-1234-5678.",
+    postcode: /^\d{3}-?\d{4}$/,
+    postcodeError: "Use a 7-digit postcode, e.g. 160-0023.",
+    formatPostcode: (d) => (d.length === 7 ? `${d.slice(0, 3)}-${d.slice(3)}` : undefined),
+  },
+  BD: {
+    phone: (v) => /^(?:\+?880|0)1[3-9]\d{8}$/.test(v.replace(/[\s()-]/g, "")),
+    phoneError: "Use a Bangladeshi mobile number, e.g. 01712-345678.",
+    postcode: /^\d{4}$/,
+    postcodeError: "Use a 4-digit postcode, e.g. 1207.",
+  },
+  US: {
+    phone: isGenericPhone,
+    phoneError: "Enter a valid phone number.",
+    postcode: /^\d{5}(-\d{4})?$/,
+    postcodeError: "Use a 5-digit ZIP code, e.g. 94105.",
+  },
 };
+
+const DEFAULT_RULES: CountryRules = {
+  phone: isGenericPhone,
+  phoneError: "Enter a valid phone number.",
+  postcode: /^[A-Za-z0-9][A-Za-z0-9 -]{1,9}$/,
+  postcodeError: "Enter a valid postcode.",
+};
+
+const storeCountry = () => company().locale.country;
+const rules = (country = storeCountry()) => RULES[country] ?? DEFAULT_RULES;
+
+export const isPhone = (value: string, country?: string) => rules(country).phone(value);
+export const phoneError = (country?: string) => rules(country).phoneError;
+export const isPostcode = (v: string, country?: string) => rules(country).postcode.test(v.trim());
+export const postcodeError = (country?: string) => rules(country).postcodeError;
+
+/** Digits and letters only, for comparing postcodes written with or without a separator. */
+export const postcodeKey = (v?: string) => (v ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+
+/** "1000001" / "100-0001" → "100-0001" in Japan; other countries keep what was typed. */
+export const normalizePostcode = (v: string, country?: string) => rules(country).formatPostcode?.(v.replace(/\D/g, "")) ?? v.trim();
 
 export const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());

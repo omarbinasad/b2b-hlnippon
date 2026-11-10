@@ -1,5 +1,6 @@
 "use client";
 
+import { useCan } from "@/components/admin/capabilities-context";
 import { useState, useTransition } from "react";
 import { setLineStockAction } from "@/app/admin/orders/actions";
 import { StockBadge } from "@/components/ui/badge";
@@ -20,6 +21,7 @@ export function LineStockControl({ orderId, productId, variationId, itemName, in
   itemName: string;
   info: LineStock | null;
 }) {
+  const canChange = useCan()("order_stock.edit");
   const [open, setOpen] = useState(false);
   const [quantity, setQuantity] = useState(String(info?.stock.quantity ?? 0));
   const [message, setMessage] = useState("");
@@ -48,7 +50,7 @@ export function LineStockControl({ orderId, productId, variationId, itemName, in
       {info.mode === "quantity" && <span className="tabular-nums text-muted">{info.stock.quantity ?? 0} left</span>}
       {info.unavailable ? (
         <span className="text-muted">{info.unavailable}</span>
-      ) : (
+      ) : canChange && (
         <button type="button" onClick={() => setOpen(true)} className="font-medium text-brand hover:underline" aria-label={`Change stock for ${itemName}`}>
           Change stock
         </button>

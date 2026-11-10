@@ -8,21 +8,17 @@
 import type { Route } from "next";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getAdminActor } from "@/lib/auth/session";
+import { actorWith } from "@/lib/auth/session";
 import { repositories } from "@/lib/data";
 import { accountStatuses } from "@/lib/enums";
 import type { AccountStatus, AddressInput, CustomerDetailsInput, FieldErrors, PostcodeLookup } from "@/lib/types";
+import { storeCountry } from "@/lib/locations";
 
 export type CustomerActionResult = { ok: true } | { ok: false; errors: FieldErrors; message: string };
 
 const str = (v: unknown, max = 300) => (typeof v === "string" ? v.slice(0, max) : "");
 const opt = (v: unknown, max = 300) => str(v, max).trim() || undefined;
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === "object" ? (v as Record<string, unknown>) : {});
-
-async function actorWith(permission: string) {
-  const actor = await getAdminActor();
-  return actor.permissions.includes(permission) ? { id: actor.id, name: actor.name, role: actor.role } : null;
-}
 
 const denied: CustomerActionResult = { ok: false, errors: {}, message: "You don't have permission to do this (mock permissions)." };
 const failed = (r: { errors: FieldErrors; message?: string }, fallback: string): CustomerActionResult => ({
@@ -32,6 +28,7 @@ const failed = (r: { errors: FieldErrors; message?: string }, fallback: string):
 });
 
 function refresh(id?: string) {
+  revalidatePath("/admin", "layout"); // Sidebar badges and the notification bell.
   revalidatePath("/admin/customers");
   if (id) revalidatePath(`/admin/customers/${id}`);
   revalidatePath("/admin/customer-groups", "layout");
@@ -42,11 +39,11 @@ function refresh(id?: string) {
 // --- Create / edit -------------------------------------------------------------------
 
 export async function createCustomerAction(raw: unknown): Promise<CustomerActionResult> {
-  const actor = await actorWith("customers.manage");
+  const actor = await actorWith("customers.create");
   if (!actor) return denied;
   const v = obj(raw);
   const status = v.status === "approved" ? "approved" : "pending";
-  if (status === "approved" && !(await actorWith("customers.approve"))) return denied;
+  if (status === "approved" && !(await actorWith("customer_approval.approve"))) return denied;
   const result = await repositories.customers.create(
     {
       companyName: str(v.companyName, 200),
@@ -64,7 +61,7 @@ export async function createCustomerAction(raw: unknown): Promise<CustomerAction
 }
 
 export async function updateCustomerAction(id: string, raw: unknown): Promise<CustomerActionResult> {
-  const actor = await actorWith("customers.manage");
+  const actor = await actorWith("customers.edit");
   if (!actor) return denied;
   const v = obj(raw);
   const input: CustomerDetailsInput = {
@@ -89,7 +86,7 @@ export async function updateCustomerAction(id: string, raw: unknown): Promise<Cu
 // --- Approval workflow -----------------------------------------------------------------
 
 export async function setCustomerStatusAction(id: string, status: string, reason?: string): Promise<CustomerActionResult> {
-  const actor = await actorWith("customers.approve");
+  const actor = await actorWith("customer_approval.approve");
   if (!actor) return denied;
   if (!accountStatuses.includes(status as AccountStatus)) return { ok: false, errors: {}, message: "Unknown status." };
   const customerId = str(id, 100);
@@ -102,7 +99,7 @@ export async function setCustomerStatusAction(id: string, status: string, reason
 // --- Addresses ---------------------------------------------------------------------------
 
 export async function saveAddressAction(id: string, raw: unknown): Promise<CustomerActionResult> {
-  const actor = await actorWith("customers.manage");
+  const actor = await actorWith("customers.edit");
   if (!actor) return denied;
   const v = obj(raw);
   const input: AddressInput = {
@@ -111,7 +108,7 @@ export async function saveAddressAction(id: string, raw: unknown): Promise<Custo
     label: str(v.label, 200),
     recipientName: str(v.recipientName, 200),
     companyName: opt(v.companyName),
-    country: "JP",
+    country: storeCountry(),
     prefecture: str(v.prefecture, 50),
     city: str(v.city, 100),
     area: opt(v.area),
@@ -129,13 +126,24 @@ export async function saveAddressAction(id: string, raw: unknown): Promise<Custo
 }
 
 export async function deleteAddressAction(id: string, addressId: string): Promise<CustomerActionResult> {
-  const actor = await actorWith("customers.manage");
+  const actor = await actorWith("customers.edit");
   if (!actor) return denied;
   const customerId = str(id, 100);
   const result = await repositories.customers.deleteAddress(customerId, str(addressId, 100), actor);
   if (!result.ok) return failed(result, "The address could not be deleted.");
   refresh(customerId);
   return { ok: true };
+}
+
+/** Permanently deletes a customer who has never ordered (the repository checks). DEMO: server memory. */
+export async function deleteCustomerAction(id: string): Promise<CustomerActionResult> {
+  const actor = await actorWith("customers.delete");
+  if (!actor) return denied;
+  const customerId = str(id, 100);
+  const result = await repositories.customers.remove(customerId, actor);
+  if (!result.ok) return failed(result, "The customer could not be deleted.");
+  refresh();
+  redirect("/admin/customers?notice=customer-deleted" as Route);
 }
 
 /** MOCK lookup against a small sample dataset. */

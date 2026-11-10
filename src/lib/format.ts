@@ -2,45 +2,52 @@ import { STORE_CURRENCY } from "@/config/currency";
 import { siteConfig } from "@/config/site";
 import type { Address, Money, StockStatus, Weight } from "@/lib/types";
 
-const { currencySymbol, numberLocale, dateLocale, timeZone } = siteConfig;
-const { minorDigits } = STORE_CURRENCY;
-
-const amountFmt = new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 0 });
-const minorFmt = new Intl.NumberFormat(numberLocale, { minimumFractionDigits: minorDigits, maximumFractionDigits: minorDigits });
-const factor = 10 ** minorDigits;
-const compactFmt = new Intl.NumberFormat(numberLocale, { notation: "compact", maximumFractionDigits: 1 });
-const numberFmt = new Intl.NumberFormat(numberLocale);
-const dateFmt = new Intl.DateTimeFormat(dateLocale, { day: "numeric", month: "short", year: "numeric", timeZone });
-const dateTimeFmt = new Intl.DateTimeFormat(dateLocale, {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-  timeZone,
-});
-/** For calendar dates ("YYYY-MM-DD") that carry no time zone. */
-const calendarFmt = new Intl.DateTimeFormat(dateLocale, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
-const calendarShortFmt = new Intl.DateTimeFormat(dateLocale, { day: "numeric", month: "short", timeZone: "UTC" });
-
 const signed = (amount: number, text: string) => (amount < 0 ? `-${text}` : text);
+
+function buildFormatters() {
+  const { numberLocale, dateLocale, timeZone } = siteConfig;
+  const { minorDigits } = STORE_CURRENCY;
+  const date = { day: "numeric", month: "short", year: "numeric" } as const;
+  return {
+    amount: new Intl.NumberFormat(numberLocale, { maximumFractionDigits: 0 }),
+    minor: new Intl.NumberFormat(numberLocale, { minimumFractionDigits: minorDigits, maximumFractionDigits: minorDigits }),
+    compact: new Intl.NumberFormat(numberLocale, { notation: "compact", maximumFractionDigits: 1 }),
+    number: new Intl.NumberFormat(numberLocale),
+    date: new Intl.DateTimeFormat(dateLocale, { ...date, timeZone }),
+    dateTime: new Intl.DateTimeFormat(dateLocale, { ...date, hour: "2-digit", minute: "2-digit", timeZone }),
+    /** For calendar dates ("YYYY-MM-DD") that carry no time zone. */
+    calendar: new Intl.DateTimeFormat(dateLocale, { ...date, timeZone: "UTC" }),
+    calendarShort: new Intl.DateTimeFormat(dateLocale, { day: "numeric", month: "short", timeZone: "UTC" }),
+  };
+}
+
+// Intl formatters are costly to create, so they are kept until a setting they depend on changes.
+let cached: { key: string; fmt: ReturnType<typeof buildFormatters> } | undefined;
+function fmt() {
+  const key = [siteConfig.numberLocale, siteConfig.dateLocale, siteConfig.timeZone, STORE_CURRENCY.minorDigits].join("|");
+  if (cached?.key !== key) cached = { key, fmt: buildFormatters() };
+  return cached.fmt;
+}
+
+const withSymbol = (text: string) => (STORE_CURRENCY.symbolPosition === "after" ? `${text} ${STORE_CURRENCY.symbol}` : `${STORE_CURRENCY.symbol}${text}`);
 
 /** ¥1,248,000. For currencies with decimals, decimals show only when the amount has them, so displayed lines add up. */
 export const formatMoney = (amount: Money) => {
   const abs = Math.abs(amount);
-  const fmt = minorDigits === 0 || Math.abs(abs * factor - Math.round(abs) * factor) < 0.5 ? amountFmt : minorFmt;
-  return signed(amount, `${currencySymbol}${fmt.format(abs)}`);
+  const { minorDigits } = STORE_CURRENCY;
+  const factor = 10 ** minorDigits;
+  const f = minorDigits === 0 || Math.abs(abs * factor - Math.round(abs) * factor) < 0.5 ? fmt().amount : fmt().minor;
+  return signed(amount, withSymbol(f.format(abs)));
 };
 /** ¥1.2M — for chart axes and tight spaces. */
-export const formatMoneyCompact = (amount: Money) =>
-  signed(amount, `${currencySymbol}${compactFmt.format(Math.abs(amount))}`);
-export const formatNumber = (value: number) => numberFmt.format(value);
-export const formatDate = (iso: string) => dateFmt.format(new Date(iso));
-export const formatDateTime = (iso: string) => dateTimeFmt.format(new Date(iso));
+export const formatMoneyCompact = (amount: Money) => signed(amount, withSymbol(fmt().compact.format(Math.abs(amount))));
+export const formatNumber = (value: number) => fmt().number.format(value);
+export const formatDate = (iso: string) => fmt().date.format(new Date(iso));
+export const formatDateTime = (iso: string) => fmt().dateTime.format(new Date(iso));
 /** "2026-09-01" → "1 Sept 2026" */
-export const formatCalendarDate = (date: string) => calendarFmt.format(new Date(`${date}T00:00:00Z`));
+export const formatCalendarDate = (date: string) => fmt().calendar.format(new Date(`${date}T00:00:00Z`));
 /** "2026-09-01" → "1 Sept" */
-export const formatCalendarDateShort = (date: string) => calendarShortFmt.format(new Date(`${date}T00:00:00Z`));
+export const formatCalendarDateShort = (date: string) => fmt().calendarShort.format(new Date(`${date}T00:00:00Z`));
 export const formatWeight = (w: Weight) => `${w.value} ${w.unit}`;
 /** File size, e.g. "820 KB", "2.4 MB". */
 export const formatFileSize = (bytes: number) =>

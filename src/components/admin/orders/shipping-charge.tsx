@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { formatMoney } from "@/lib/format";
-import { AMOUNT_STEP } from "@/lib/orders/calc";
+import { amountStep } from "@/lib/orders/calc";
 import type { FieldErrors } from "@/lib/types";
 import { EditPreview, useEditPreview } from "./edit-preview";
 
@@ -62,7 +62,7 @@ export function ShippingChargeButton({ orderId, label, amount }: { orderId: stri
                 type="number"
                 inputMode="numeric"
                 min={0}
-                step={AMOUNT_STEP}
+                step={amountStep()}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 aria-invalid={Boolean(errors.amount)}

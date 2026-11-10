@@ -1,9 +1,16 @@
+import type { Route } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { NavLink } from "@/components/layout/nav-link";
 import { Icon } from "@/components/ui/icons";
 import { Logo } from "@/components/ui/logo";
-import { adminNav } from "@/config/site";
+import { adminNav, adminNavGroups } from "@/config/site";
+import type { AdminNotificationFeed } from "@/lib/types";
+import { LogoutButton } from "@/components/layout/logout-button";
+import { canOpen } from "@/lib/auth/capabilities";
+import { CapabilitiesProvider } from "./capabilities-context";
+import { NotificationBell } from "./notification-bell";
+import { RouteGuard } from "./route-guard";
 import { SidebarToggle } from "./sidebar-toggle";
 
 /*
@@ -15,7 +22,46 @@ import { SidebarToggle } from "./sidebar-toggle";
 const SIDEBAR_ID = "admin-sidebar";
 const hideWhenCollapsed = "lg:sidebar-collapsed:sr-only";
 
-export function AdminShell({ banner, children }: { banner?: ReactNode; children: ReactNode }) {
+/** Count on a sidebar item; a small corner badge when the sidebar is collapsed to icons. */
+function NavBadge({ count, label, href }: { count?: number; label?: string; href?: Route }) {
+  if (!count || !href) return null;
+  return (
+    <Link
+      href={href}
+      title={`${count} ${label}`}
+      className="absolute top-1/2 right-2 grid h-5 min-w-5 -translate-y-1/2 place-items-center rounded-full bg-cta-from px-1.5 text-[0.6875rem] leading-none font-semibold text-white tabular-nums hover:opacity-90 lg:sidebar-collapsed:top-1 lg:sidebar-collapsed:right-1 lg:sidebar-collapsed:translate-y-0"
+    >
+      {count > 99 ? "99+" : count}
+      <span className="sr-only"> {label}</span>
+    </Link>
+  );
+}
+
+const NOTIFICATION_CAPABILITY: Record<AdminNotificationFeed["items"][number]["kind"], string[]> = {
+  order: ["orders.view"],
+  registration: ["customer_approval.view"],
+  low_stock: ["inventory.view", "products.view"],
+  contact: ["customers.view"],
+};
+
+/** Only what this role works with. A link it can't open is dropped, not the notification. */
+function notificationsFor(feed: AdminNotificationFeed, capabilities: string[]): AdminNotificationFeed {
+  const items = feed.items
+    .filter((n) => NOTIFICATION_CAPABILITY[n.kind].some((c) => capabilities.includes(c)))
+    .map((n) => (n.href && !canOpen(capabilities, n.href) ? { ...n, href: undefined } : n));
+  return { ...feed, items, total: items.length, unread: items.filter((n) => !n.read).length };
+}
+
+export function AdminShell({ banner, notifications, capabilities, roleName, preview, children }: { banner?: ReactNode; notifications: AdminNotificationFeed; capabilities: string[]; roleName: string; preview: ReactNode; children: ReactNode }) {
+  const allowed = (href: string) => canOpen(capabilities, href) && (href !== "/admin/settings/invoices" || !canOpen(capabilities, "/admin/settings"));
+  const groups = adminNavGroups.map((g) => ({ ...g, items: g.items.filter((i) => allowed(i.href)) })).filter((g) => g.items.length);
+  const feed = notificationsFor(notifications, capabilities);
+  // Work waiting in each section (like WooCommerce's order count). Handling the work lowers it.
+  const badges: Partial<Record<string, { count: number; label: string; href: Route }>> = {
+    "/admin/orders": { count: notifications.openOrders, label: "open orders", href: "/admin/orders?status=open" },
+    "/admin/customers/requests": { count: notifications.pendingRegistrations, label: "pending requests", href: "/admin/customers/requests?status=pending" },
+  };
+
   return (
     <div className="flex flex-1 flex-col lg:flex-row">
       <aside
@@ -33,23 +79,33 @@ export function AdminShell({ banner, children }: { banner?: ReactNode; children:
         </div>
 
         <nav aria-label="Admin" className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-          <ul className="scrollbar-none flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:overflow-visible lg:pb-0">
-            {adminNav.map((item) => (
-              <li key={item.href} className="shrink-0">
+          {/* Phones: one scrolling strip, headings hidden. Large screens: labelled groups. */}
+          <div className="scrollbar-none flex gap-1 overflow-x-auto px-3 pb-3 lg:block lg:overflow-visible lg:pb-0">
+            {groups.map((group) => (
+              <div key={group.label} className="contents lg:mb-3 lg:block lg:last:mb-0">
+                <p className={`${hideWhenCollapsed} hidden px-3 pt-2 pb-1 text-[0.6875rem] font-semibold tracking-wider uppercase opacity-60 lg:block`}>{group.label}</p>
+                <ul className="contents lg:flex lg:flex-col lg:gap-1">
+                  {group.items.map((item) => (
+                    <li key={item.href} className="relative shrink-0">
                 <NavLink
                   href={item.href}
                   exact={item.href === "/admin"}
                   except={adminNav.filter((o) => o.href.startsWith(`${item.href}/`)).map((o) => o.href)}
                   title={item.label}
-                  className="flex items-center gap-3 rounded-ui px-3 py-2 text-sm font-medium whitespace-nowrap hover:bg-sidebar-active/60 hover:text-sidebar-active-foreground lg:py-2.5 lg:sidebar-collapsed:justify-center"
+                  className="relative flex items-center gap-3 rounded-ui px-3 py-2 text-sm font-medium whitespace-nowrap hover:bg-sidebar-active/60 hover:text-sidebar-active-foreground lg:py-2.5 lg:sidebar-collapsed:justify-center"
                   activeClassName="bg-sidebar-active !text-sidebar-active-foreground"
                 >
                   {item.icon && <Icon name={item.icon} className="size-5 shrink-0" />}
-                  <span className={hideWhenCollapsed}>{item.label}</span>
-                </NavLink>
+                  {/* A long label wraps instead of pushing its badge out of the sidebar. */}
+                  <span className={`${hideWhenCollapsed} min-w-0 lg:leading-tight lg:whitespace-normal ${badges[item.href]?.count ? "pr-7" : ""}`}>{item.label}</span>
+                    </NavLink>
+                    <NavBadge {...badges[item.href]} />
               </li>
+                  ))}
+                </ul>
+              </div>
             ))}
-          </ul>
+          </div>
         </nav>
 
         <div className="hidden space-y-1 border-t border-sidebar-active px-3 py-3 lg:block">
@@ -65,10 +121,19 @@ export function AdminShell({ banner, children }: { banner?: ReactNode; children:
         </div>
       </aside>
 
-      <main id="main" className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
-        {banner && <div className="mb-5">{banner}</div>}
-        {children}
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="z-20 flex h-14 items-center justify-end gap-3 border-b border-line bg-surface px-4 sm:px-6 lg:sticky lg:top-0 lg:px-8">
+          <div className="mr-auto min-w-0">{preview}</div>
+          <LogoutButton className="text-sm text-muted hover:text-foreground" />
+          <NotificationBell feed={feed} />
+        </div>
+        <main id="main" className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+          {banner && <div className="mb-5">{banner}</div>}
+          <CapabilitiesProvider capabilities={capabilities}>
+            <RouteGuard capabilities={capabilities} roleName={roleName}>{children}</RouteGuard>
+          </CapabilitiesProvider>
+        </main>
+      </div>
     </div>
   );
 }

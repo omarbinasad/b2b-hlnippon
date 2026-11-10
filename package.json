@@ -1,5 +1,5 @@
 {
-  "name": "b2b-commerce",
+  "name": "b2b-commerce-frontend",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -8,10 +8,18 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "node --experimental-strip-types --no-warnings --test \"tests/**/*.test.ts\""
+    "test": "node --experimental-strip-types --no-warnings --test \"tests/**/*.test.ts\"",
+    "docs:api": "node --experimental-strip-types --no-warnings scripts/generate-api-docs.ts",
+    "docs:routes": "node --experimental-strip-types --no-warnings scripts/generate-route-map.ts"
   },
   "dependencies": {
-    "next": "16.3.7",
+    "@tiptap/extension-image": "3.32.2",
+    "@tiptap/extension-table": "3.32.2",
+    "@tiptap/extension-text-align": "3.32.2",
+    "@tiptap/pm": "3.32.2",
+    "@tiptap/react": "3.32.2",
+    "@tiptap/starter-kit": "3.32.2",
+    "next": "16.4.5",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -21,7 +29,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.7",
+    "eslint-config-next": "16.4.5",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

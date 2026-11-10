@@ -19,7 +19,7 @@ export default async function NewCustomerPage() {
           <QuickCustomerForm groups={groups} />
         </Card>
         <div className="space-y-3">
-          <MockPermissionNote permission="customers.manage" />
+          <MockPermissionNote permission="customers.edit" />
           <p className="text-xs text-muted">No welcome email or SMS is sent; messaging is a later module. No login is created.</p>
           <DemoEditingNotice />
         </div>

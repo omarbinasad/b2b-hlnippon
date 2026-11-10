@@ -1,3 +1,4 @@
+import { Can } from "@/components/admin/capabilities-context";
 import Link from "next/link";
 import { duplicateProductAction, setProductStatusAction } from "@/app/admin/products/actions";
 import { buttonClasses } from "@/components/ui/button";
@@ -10,11 +11,14 @@ export function ProductEditActions({ product }: { product?: Product }) {
   const returnTo = product ? `/admin/products/${product.id}/edit` : "/admin/products";
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Link href="/admin/products/new" className={buttonClasses({ variant: "secondary", size: "sm" })}>
-        <Icon name="plus" className="size-4" /> Add new product
-      </Link>
+      <Can cap="products.create">
+        <Link href="/admin/products/new" className={buttonClasses({ variant: "secondary", size: "sm" })}>
+          <Icon name="plus" className="size-4" /> Add new product
+        </Link>
+      </Can>
       {product && (
         <>
+          <Can cap="products.create">
           <form action={duplicateProductAction}>
             <input type="hidden" name="id" value={product.id} />
             <input type="hidden" name="returnTo" value={returnTo} />
@@ -22,6 +26,8 @@ export function ProductEditActions({ product }: { product?: Product }) {
               <Icon name="copy" className="size-4" /> Copy to a new draft
             </button>
           </form>
+          </Can>
+          <Can cap={product.status === "archived" ? "products.edit" : "products.delete"}>
           <form action={setProductStatusAction}>
             <input type="hidden" name="id" value={product.id} />
             <input type="hidden" name="returnTo" value={returnTo} />
@@ -51,6 +57,7 @@ export function ProductEditActions({ product }: { product?: Product }) {
               </>
             )}
           </form>
+          </Can>
         </>
       )}
     </div>

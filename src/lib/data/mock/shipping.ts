@@ -1,5 +1,4 @@
-import { siteConfig } from "@/config/site";
-import type { ShippingZone, StoreSettings } from "@/lib/types";
+import type { ShippingZone } from "@/lib/types";
 
 /*
  * DEMO store settings and SAMPLE shipping zones/rates. The amounts are illustrative only —
@@ -7,25 +6,6 @@ import type { ShippingZone, StoreSettings } from "@/lib/types";
  * page refreshes but are lost when the server restarts.
  */
 const at = "2026-01-05T09:00:00+09:00";
-
-const seedSettings: StoreSettings = {
-  storeName: siteConfig.name,
-  email: siteConfig.contact.email,
-  // Sample number in a valid Japanese format (the site config placeholder is not dialable).
-  phone: "03-0000-0000",
-  address: {
-    addressLine1: "1-1-1 Sample-cho (sample)",
-    city: "Chiyoda-ku",
-    prefecture: "Tokyo",
-    postalCode: "100-0001",
-    country: "JP",
-  },
-  currency: "JPY",
-  timeZone: "Asia/Tokyo",
-  weightUnit: "kg",
-  dimensionUnit: "cm",
-  updatedAt: at,
-};
 
 /** Tokyo's special wards used by the sample "Tokyo 23 wards" zone (a subset is enough for the demo). */
 const TOKYO_WARDS = ["Chiyoda-ku", "Chuo-ku", "Minato-ku", "Shinjuku-ku", "Shibuya-ku", "Taito-ku", "Sumida-ku", "Koto-ku", "Shinagawa-ku", "Toshima-ku"];
@@ -140,7 +120,7 @@ const seedZones: ShippingZone[] = [
   },
 ];
 
-const store = globalThis as typeof globalThis & { __mockShippingV2?: { settings: StoreSettings; zones: ShippingZone[] } };
-store.__mockShippingV2 ??= { settings: seedSettings, zones: seedZones };
+const store = globalThis as typeof globalThis & { __mockShippingV2?: { zones: ShippingZone[] } };
+store.__mockShippingV2 ??= { zones: seedZones };
 
 export const mockShipping = store.__mockShippingV2;

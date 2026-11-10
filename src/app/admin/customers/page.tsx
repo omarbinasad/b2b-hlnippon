@@ -1,3 +1,4 @@
+import { Can } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ActionNotice, DemoEditingNotice } from "@/components/admin/demo-notice";
@@ -16,7 +17,7 @@ import type { CustomerSortField } from "@/lib/data/repositories";
 import { accountStatuses, accountStatusOptions } from "@/lib/enums";
 import { formatDate, formatMoney, formatNumber } from "@/lib/format";
 import { flatParams, listHref, listState, oneOf, param } from "@/lib/list-params";
-import { JP_PREFECTURES } from "@/lib/locations";
+import { addressLabels, regionNames } from "@/lib/locations";
 
 export const metadata: Metadata = { title: "Customers" };
 
@@ -31,7 +32,7 @@ export default async function AdminCustomersPage({ searchParams }: PageProps<"/a
   const filters = {
     status: oneOf(param(sp, "status"), accountStatuses),
     groupId: oneOf(param(sp, "group"), groups.map((g) => g.id)),
-    prefecture: oneOf(param(sp, "prefecture"), JP_PREFECTURES),
+    prefecture: oneOf(param(sp, "prefecture"), regionNames()),
     hasOrders: orders === "yes" ? true : orders === "none" ? false : undefined,
   };
   const customers = await repositories.customers.list({ ...state, ...filters, perPage: 20 });
@@ -45,9 +46,12 @@ export default async function AdminCustomersPage({ searchParams }: PageProps<"/a
         title="Customers"
         description="Business accounts, approval status, groups and order history."
         actions={
-          <ButtonLink href="/admin/customers/new">
+          <>
+            <Can cap="customers.export"><ButtonLink href={`/admin/customers/export?${new URLSearchParams(params)}` as "/admin/customers"} prefetch={false} variant="secondary">Export CSV</ButtonLink></Can>
+            <Can cap="customers.create"><ButtonLink href="/admin/customers/new">
             <Icon name="plus" className="size-4" /> Add customer
-          </ButtonLink>
+          </ButtonLink></Can>
+          </>
         }
       />
       <ActionNotice notice={notice} />
@@ -56,7 +60,7 @@ export default async function AdminCustomersPage({ searchParams }: PageProps<"/a
           <p>
             <strong>{counts.pending} registration request{counts.pending === 1 ? "" : "s"}</strong> waiting for approval.
           </p>
-          <ButtonLink href="/admin/customers/requests" size="sm">Review requests</ButtonLink>
+          <ButtonLink href="/admin/customers/requests?status=pending" size="sm">Review requests</ButtonLink>
         </div>
       )}
 
@@ -88,7 +92,7 @@ export default async function AdminCustomersPage({ searchParams }: PageProps<"/a
         filters={[
           { name: "status", label: "Approval", options: accountStatusOptions, allLabel: "All statuses" },
           { name: "group", label: "Group", options: groups.map((g) => ({ value: g.id, label: g.name })), allLabel: "All groups" },
-          { name: "prefecture", label: "Prefecture", options: JP_PREFECTURES.map((d) => ({ value: d, label: d })), allLabel: "All prefectures" },
+          { name: "prefecture", label: addressLabels().region, options: regionNames().map((d) => ({ value: d, label: d })), allLabel: "All prefectures" },
           { name: "orders", label: "Orders", options: [{ value: "yes", label: "Has orders" }, { value: "none", label: "No orders yet" }], allLabel: "Any" },
         ]}
         dates={{ fromLabel: "Registered from", toLabel: "Registered to" }}
@@ -116,13 +120,13 @@ export default async function AdminCustomersPage({ searchParams }: PageProps<"/a
                 const place = c.addresses.find((a) => a.isDefault) ?? c.addresses[0];
                 return (
                   <tr key={c.id}>
-                    <td className="min-w-44">
+                    <td className="min-w-36">
                       <Link href={`/admin/customers/${c.id}`} className="font-medium text-brand hover:underline">{c.companyName}</Link>
                       <span className="block text-xs text-muted">
                         {[c.businessType, c.legacyWooId && `legacy #${c.legacyWooId}`].filter(Boolean).join(" · ") || "Details incomplete"}
                       </span>
                     </td>
-                    <td className="min-w-40">
+                    <td className="min-w-32">
                       {c.contactName ?? <span className="text-muted">—</span>}
                       <span className="block text-xs break-all text-muted">{c.phone ?? c.email}</span>
                     </td>
@@ -162,11 +166,11 @@ export default async function AdminCustomersPage({ searchParams }: PageProps<"/a
         ) : filtered ? (
           <EmptyState
             title="No customers match these filters"
-            description="Try another search term, status, group or prefecture."
+            description="Try another search term, status, group or area."
             action={<ButtonLink href={PATH} variant="secondary">Clear filters</ButtonLink>}
           />
         ) : (
-          <EmptyState title="No customers yet" action={<ButtonLink href="/admin/customers/new">Add customer</ButtonLink>} />
+          <EmptyState title="No customers yet" action={<Can cap="customers.create"><ButtonLink href="/admin/customers/new">Add customer</ButtonLink></Can>} />
         )}
         <Pagination page={customers.page} totalPages={customers.totalPages} pathname={PATH} searchParams={params} />
         <p className="text-xs text-muted">Orders and total spend count non-cancelled orders, after refunds.</p>

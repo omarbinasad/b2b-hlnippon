@@ -5,6 +5,7 @@ import { siteConfig } from "@/config/site";
 import { cx } from "@/lib/cx";
 import { addDays, isISODate, todayIn } from "@/lib/date-range";
 import { Field } from "./field";
+import { Select } from "./select";
 import { Icon } from "./icons";
 
 /*
@@ -16,14 +17,13 @@ import { Icon } from "./icons";
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const WEEK_START = siteConfig.weekStartsOn;
 const PANEL_WIDTH = 296;
 
 const ymd = (date: string) => [Number(date.slice(0, 4)), Number(date.slice(5, 7)), Number(date.slice(8, 10))] as const;
 const fromUTC = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const weekday = (date: string) => new Date(`${date}T00:00:00Z`).getUTCDay();
 const monthStart = (date: string) => `${date.slice(0, 8)}01`;
-const startOfWeek = (date: string) => addDays(date, -((weekday(date) - WEEK_START + 7) % 7));
+const startOfWeek = (date: string) => addDays(date, -((weekday(date) - siteConfig.weekStartsOn + 7) % 7));
 
 /** Same day in another month, clamped to that month's length. */
 function addMonths(date: string, months: number) {
@@ -162,12 +162,12 @@ export function DatePicker({
   const minYear = min ? Number(min.slice(0, 4)) : todayYear - 10;
   const maxYear = max ? Number(max.slice(0, 4)) : todayYear + 2;
   const years = Array.from({ length: Math.max(1, maxYear - minYear + 1) }, (_, i) => minYear + i);
-  const weekdayOrder = Array.from({ length: 7 }, (_, i) => (WEEK_START + i) % 7);
+  const weekdayOrder = Array.from({ length: 7 }, (_, i) => (siteConfig.weekStartsOn + i) % 7);
   const inRange = (d: string) => Boolean(rangeStart && rangeEnd && d > rangeStart && d < rangeEnd);
   const isEndpoint = (d: string) => d === rangeStart || d === rangeEnd;
 
   const navButton = "grid size-8 place-items-center rounded-full text-muted hover:bg-surface-muted hover:text-foreground disabled:opacity-30";
-  const headerSelect = "h-8 rounded-ui bg-transparent px-1.5 text-sm font-semibold hover:bg-surface-muted";
+  const headerSelect = "h-8 w-auto !border-transparent !bg-transparent px-1.5 font-semibold hover:!bg-surface-muted";
 
   return (
     <div ref={rootRef} className="relative">
@@ -218,7 +218,7 @@ export function DatePicker({
             </button>
             <div id={headingId} className="flex items-center" aria-live="polite">
               <label className="sr-only" htmlFor={`${dialogId}-m`}>Month</label>
-              <select
+              <Select
                 id={`${dialogId}-m`}
                 className={headerSelect}
                 value={viewMonth}
@@ -227,9 +227,10 @@ export function DatePicker({
                 {MONTHS.map((m, i) => (
                   <option key={m} value={i + 1}>{m}</option>
                 ))}
-              </select>
+              </Select>
               <label className="sr-only" htmlFor={`${dialogId}-y`}>Year</label>
-              <select
+              <Select
+                noSearch
                 id={`${dialogId}-y`}
                 className={headerSelect}
                 value={viewYear}
@@ -238,7 +239,7 @@ export function DatePicker({
                 {years.map((y) => (
                   <option key={y} value={y}>{y}</option>
                 ))}
-              </select>
+              </Select>
             </div>
             <button type="button" className={navButton} onClick={() => setFocused(clamp(addMonths(focused, 1), min, max))} aria-label="Next month">
               <Icon name="chevronRight" className="size-4" />
