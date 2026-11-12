@@ -3,7 +3,7 @@
  * field errors) and the mock repository (simulated server-side 422). The real
  * backend must enforce the same rules plus uniqueness checks.
  */
-import type { CategoryInput, Dimensions, FieldErrors, ProductInput } from "@/lib/types";
+import type { CategoryInput, Dimensions, FieldErrors, ProductInput, Product } from "@/lib/types";
 import { amountRule, isValidAmount } from "../orders/calc.ts";
 
 export const LIMITS = {
@@ -51,9 +51,11 @@ function checkText(errors: FieldErrors, key: string, value: string | undefined, 
   else if (v.length > max) errors[key] = `${label} must be ${max} characters or fewer.`;
 }
 
-function checkSku(errors: FieldErrors, key: string, value: string) {
-  if (!value.trim()) errors[key] = "SKU is required.";
-  else if (!SKU.test(value) || value.length > LIMITS.sku) errors[key] = "Use letters, numbers, dots, hyphens or underscores.";
+/** A draft may leave the SKU empty; publishing needs one. */
+function checkSku(errors: FieldErrors, key: string, value: string, required = true) {
+  if (!value.trim()) {
+    if (required) errors[key] = "Enter a SKU before publishing.";
+  } else if (!SKU.test(value) || value.length > LIMITS.sku) errors[key] = "Use letters, numbers, dots, hyphens or underscores.";
 }
 
 function checkGtin(errors: FieldErrors, key: string, value?: string) {
@@ -83,8 +85,23 @@ function checkPricing(
   if (p.saleFrom && p.saleTo && p.saleTo < p.saleFrom) errors[`${prefix}saleTo`] = "The sale must end on or after its start date.";
 }
 
-function checkWeight(errors: FieldErrors, key: string, value: number) {
-  if (!(Number.isFinite(value) && value > 0)) errors[key] = "Enter a weight greater than 0.";
+/** Package weight, used for shipping. A draft may leave it at 0; publishing needs it. */
+function checkWeight(errors: FieldErrors, key: string, value: number, required = true) {
+  if (!Number.isFinite(value) || value < 0) errors[key] = "Enter a weight of 0 or more.";
+  else if (required && value === 0) errors[key] = "Enter the package weight before publishing (it's used for shipping).";
+}
+
+/** Order limits in packages: whole numbers, max not below min, min a multiple of the increment. */
+export function checkOrderQuantity(errors: FieldErrors, q: { minQuantity: number; maxQuantity?: number; quantityStep: number; soldIndividually?: boolean }) {
+  const whole = (n: number | undefined) => typeof n === "number" && Number.isInteger(n);
+  if (!whole(q.minQuantity) || q.minQuantity < 1) errors.minQuantity = "Enter a whole number of 1 or more.";
+  if (q.maxQuantity !== undefined && (!whole(q.maxQuantity) || q.maxQuantity < 1)) errors.maxQuantity = "Enter a whole number of 1 or more, or leave it empty for no limit.";
+  if (!whole(q.quantityStep) || q.quantityStep < 1) errors.quantityStep = "Enter a whole number of 1 or more (1 = any number).";
+  if (errors.minQuantity || errors.maxQuantity || errors.quantityStep) return;
+  if (q.maxQuantity !== undefined && q.maxQuantity < q.minQuantity) errors.maxQuantity = "The maximum can't be below the minimum.";
+  else if (q.minQuantity % q.quantityStep !== 0) errors.minQuantity = `The minimum must be a multiple of ${q.quantityStep}, the increment.`;
+  else if (q.maxQuantity !== undefined && q.maxQuantity % q.quantityStep !== 0) errors.maxQuantity = `The maximum must be a multiple of ${q.quantityStep}, the increment.`;
+  if (q.soldIndividually && (q.minQuantity > 1 || (q.maxQuantity ?? 1) > 1 || q.quantityStep > 1)) errors.soldIndividually = "A product sold individually is limited to 1 per order. Turn this off, or set the minimum, maximum and increment to 1.";
 }
 
 function checkDimensions(errors: FieldErrors, key: string, d?: Dimensions) {
@@ -106,22 +123,29 @@ export function validateProduct(input: ProductInput, selfId?: string): FieldErro
   checkText(errors, "name", input.name, "Name", LIMITS.name);
   if (!input.slug.trim()) errors.slug = "Slug is required.";
   else if (!SLUG.test(input.slug)) errors.slug = "Use lowercase letters, numbers and single hyphens (e.g. basmati-rice-5kg).";
-  checkSku(errors, "sku", input.sku);
+  if (input.type !== "simple" && input.type !== "variable") errors.type = "Choose simple or variable.";
+  checkSku(errors, "sku", input.sku, publishing);
   checkGtin(errors, "gtin", input.gtin);
   checkText(errors, "shortDescription", input.shortDescription, "Short description", LIMITS.shortDescription, false);
   checkText(errors, "description", input.description, "Description", LIMITS.description, false);
-  checkText(errors, "unitLabel", input.unitLabel, "Selling unit", 30);
+  // A draft may leave the selling unit empty; customers see it next to prices, so publishing needs it.
+  checkText(errors, "unitLabel", input.unitLabel, "Selling unit", 30, publishing);
   checkText(errors, "purchaseNote", input.purchaseNote, "Purchase note", LIMITS.purchaseNote, false);
   if (publishing && input.categoryIds.length === 0) errors.categoryIds = "Choose at least one category before publishing.";
   if (input.tags.length > LIMITS.tags) errors.tags = `Use at most ${LIMITS.tags} tags.`;
   else if (input.tags.some((t) => t.trim().length > LIMITS.tag)) errors.tags = `Each tag must be ${LIMITS.tag} characters or fewer.`;
   if (!Number.isInteger(input.menuOrder)) errors.menuOrder = "Display order must be a whole number.";
 
-  checkWeight(errors, "weight", input.weight.value);
+  checkWeight(errors, "weight", input.weight.value, publishing);
+  checkOrderQuantity(errors, input);
   checkDimensions(errors, "dimensions", input.dimensions);
   checkOptionalCount(errors, "lowStockThreshold", input.lowStockThreshold, "Low-stock threshold");
   checkOptionalCount(errors, "initialStock", input.initialStock, "Initial stock");
-  if (input.manageStock && !isCount(input.stockQuantity)) errors.stockQuantity = "Enter a whole number of 0 or more.";
+  // A variable product's own quantity matters only when an option shares it ("Same as product").
+  const sharedStock = input.type !== "variable" || input.variations.some((v) => v.stockMode === "parent");
+  if (input.manageStock && input.stockQuantity === undefined && !sharedStock) {
+    // Nothing uses it: left empty is fine.
+  } else if (input.manageStock && !isCount(input.stockQuantity)) errors.stockQuantity = "Enter a whole number of 0 or more.";
 
   input.images.forEach((img, i) => {
     if (!img.alt.trim()) errors[`images.${i}.alt`] = "Describe the image for screen readers.";
@@ -151,6 +175,7 @@ export function validateProduct(input: ProductInput, selfId?: string): FieldErro
   const variationAttrs = input.attributes.filter((a) => a.variation);
   if (variationAttrs.length === 0) errors.attributes = "Mark at least one attribute as “Used for variations” (e.g. Size).";
   if (input.variations.length === 0) errors.variations = "Add or generate at least one variation.";
+  else if (publishing && !input.variations.some((v) => v.status === "active")) errors.variations = "Turn on at least one variation before publishing.";
   if (input.variations.length > LIMITS.variations) errors.variations = `A product can have at most ${LIMITS.variations} variations.`;
 
   for (const [name, value] of Object.entries(input.defaultAttributes)) {
@@ -162,8 +187,8 @@ export function validateProduct(input: ProductInput, selfId?: string): FieldErro
   const combos = new Set<string>();
   input.variations.forEach((v, i) => {
     const p = `variations.${i}.`;
-    checkSku(errors, `${p}sku`, v.sku);
-    if (!errors[`${p}sku`] && skus.has(v.sku.trim().toLowerCase())) errors[`${p}sku`] = "SKU must be unique within the product.";
+    checkSku(errors, `${p}sku`, v.sku, publishing && v.status === "active");
+    if (!errors[`${p}sku`] && v.sku.trim() && skus.has(v.sku.trim().toLowerCase())) errors[`${p}sku`] = "SKU must be unique within the product.";
     skus.add(v.sku.trim().toLowerCase());
     checkGtin(errors, `${p}gtin`, v.gtin);
 
@@ -177,12 +202,35 @@ export function validateProduct(input: ProductInput, selfId?: string): FieldErro
     if (v.stockMode === "track" && !isCount(v.stockQuantity)) errors[`${p}stockQuantity`] = "Enter a whole number of 0 or more.";
     if (v.stockMode === "parent" && !input.manageStock)
       errors[`${p}stockMode`] = "The product doesn't track stock. Turn on “Track stock” in Inventory, or choose another option.";
-    if (v.weight) checkWeight(errors, `${p}weight`, v.weight.value);
+    if (v.weight) checkWeight(errors, `${p}weight`, v.weight.value, false);
     checkDimensions(errors, `${p}dimensions`, v.dimensions);
     if (v.image && !v.image.alt.trim()) errors[`${p}image.0.alt`] = "Describe the image for screen readers.";
     checkText(errors, `${p}description`, v.description, "Description", LIMITS.variationDescription, false);
   });
   return errors;
+}
+
+/**
+ * Why a SAVED product can't be published, in plain words (empty = it can). Used when publishing without the editor: a
+ * status change or a bulk action. The editor uses validateProduct on the full form.
+ */
+export function publishProblems(p: Pick<Product, "name" | "sku" | "type" | "basePrice" | "categoryIds" | "weight" | "quantityRule" | "soldIndividually" | "variations">): string[] {
+  const out: string[] = [];
+  if (!p.name.trim()) out.push("It has no name.");
+  if (!p.sku.trim()) out.push("It has no SKU.");
+  if (!p.categoryIds.length) out.push("It has no category.");
+  if (!(p.weight.value > 0)) out.push("It has no package weight.");
+  if (p.type === "simple" && p.basePrice === undefined) out.push("It has no price.");
+  if (p.type === "variable") {
+    const active = p.variations.filter((v) => v.status === "active");
+    if (!active.length) out.push("None of its variations is turned on.");
+    else if (active.some((v) => v.basePrice === undefined)) out.push("A variation that's turned on has no price.");
+    else if (active.some((v) => !v.sku.trim())) out.push("A variation that's turned on has no SKU.");
+  }
+  const q: FieldErrors = {};
+  checkOrderQuantity(q, { minQuantity: p.quantityRule.min, maxQuantity: p.quantityRule.max, quantityStep: p.quantityRule.step, soldIndividually: p.soldIndividually });
+  out.push(...Object.values(q));
+  return out;
 }
 
 /** Enabled variations without a regular price — they cannot be purchased. */

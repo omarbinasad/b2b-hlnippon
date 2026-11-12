@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { validateNewPassword } from "../src/lib/validation/password.ts";
 import { describe, it } from "node:test";
-import { isJpPhone, isEmail, isPostcode } from "../src/lib/customers/contact.ts";
+import { isJpPhone, isEmail, isPostcode, postcodeInput } from "../src/lib/customers/contact.ts";
 import { checkStatusChange, statusActions } from "../src/lib/customers/status.ts";
 
 describe("approval workflow", () => {
@@ -53,5 +53,21 @@ describe("new password", () => {
     assert.ok(validateNewPassword("short", "short").password);
     assert.ok(validateNewPassword("longenough", "different").confirm);
     assert.deepEqual(validateNewPassword("longenough", "longenough"), {});
+  });
+});
+
+describe("postcode inputs follow the store country", () => {
+  it("lets a Japanese postcode be typed in full, with or without the hyphen", () => {
+    const jp = postcodeInput("JP");
+    assert.equal(jp.clean("160-0023"), "160-0023");
+    assert.equal(jp.clean("1600023"), "1600023");
+    assert.equal(jp.clean("〒160-0023x"), "160-0023");
+    assert.ok(jp.maxLength >= 8);
+    assert.ok(isPostcode(jp.clean("160-0023"), "JP"));
+  });
+  it("keeps 4 digits for Bangladesh and letters where postcodes have them", () => {
+    assert.equal(postcodeInput("BD").clean("12a078"), "1207");
+    assert.equal(postcodeInput("GB").clean("SW1A 1AA"), "SW1A 1AA");
+    assert.equal(postcodeInput("GB").inputMode, "text");
   });
 });

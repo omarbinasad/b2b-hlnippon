@@ -1,6 +1,7 @@
 "use client";
 
 import { addressLabels, regionNames, storeCountry } from "@/lib/locations";
+import { postcodeInput } from "@/lib/customers/contact";
 import { useState, useTransition } from "react";
 import { saveTaxRateAction } from "@/app/admin/tax/actions";
 import { Button, ButtonLink } from "@/components/ui/button";
@@ -97,7 +98,7 @@ export function TaxRateForm({ rate, others, classes }: { rate?: TaxRate; others:
           )}
           {type === "postcode" && (
             <Field id="rate-postcode" label={addressLabels().postcode}>
-              <Input id="rate-postcode" inputMode="numeric" maxLength={4} value={postalCode} onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, ""))} />
+              <Input id="rate-postcode" inputMode={postcodeInput().inputMode} maxLength={postcodeInput().maxLength} value={postalCode} onChange={(e) => setPostalCode(postcodeInput().clean(e.target.value))} />
             </Field>
           )}
         </div>

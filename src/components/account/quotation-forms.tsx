@@ -50,24 +50,42 @@ export function QuotationRequestForm() {
   );
 }
 
-export function QuotationResponse({ id }: { id: string }) {
+/** Accept (choosing how to pay, from the methods checkout offers) or reject a quote. */
+export function QuotationResponse({ id, methods }: { id: string; methods: { id: string; title: string; description?: string }[] }) {
   const router = useRouter();
   const [error, setError] = useState("");
+  const [method, setMethod] = useState(methods.length === 1 ? methods[0].id : "");
   const [pending, start] = useTransition();
   const answer = (a: "accept" | "reject") =>
     start(async () => {
-      const r = await respondQuotationAction(id, a);
+      if (a === "accept" && methods.length > 1 && !method) return setError("Choose how you'll pay.");
+      const r = await respondQuotationAction(id, a, a === "accept" ? method || undefined : undefined);
       if (!r.ok) return setError(r.message);
       setError("");
       router.refresh();
     });
   return (
-    <div className="space-y-2">
+    <div className="space-y-3 rounded-ui border border-line bg-surface p-4">
+      {methods.length ? (
+        <fieldset>
+          <legend className="text-sm font-semibold">How you&apos;ll pay</legend>
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {methods.map((m) => (
+              <label key={m.id} className="flex cursor-pointer gap-3 rounded-ui border border-line p-3 text-sm has-checked:border-brand has-checked:bg-brand-soft">
+                <input type="radio" name={`pay-${id}`} value={m.id} checked={method === m.id} onChange={() => { setMethod(m.id); setError(""); }} className="mt-0.5 size-4 accent-brand" />
+                <span><span className="block font-medium">{m.title}</span>{m.description && <span className="block text-xs text-muted">{m.description}</span>}</span>
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      ) : (
+        <p role="note" className="rounded-ui bg-warning-soft p-3 text-sm text-warning">No payment method is available right now, so this quote can&apos;t become an order online. Please contact us to complete it.</p>
+      )}
       <div className="flex flex-wrap gap-2">
-        <Button disabled={pending} onClick={() => answer("accept")}><Icon name="check" className="size-4" /> Accept quote</Button>
+        <Button disabled={pending || !methods.length} onClick={() => answer("accept")}><Icon name="check" className="size-4" /> Accept quote</Button>
         <Button variant="secondary" disabled={pending} onClick={() => answer("reject")}>Reject quote</Button>
       </div>
-      <p className="text-xs text-muted">Accepting creates a demo order at the quoted prices. No payment is taken.</p>
+      <p className="text-xs text-muted">Accepting creates an order at the quoted prices, waiting for payment. This demo takes no payment.</p>
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
     </div>
   );

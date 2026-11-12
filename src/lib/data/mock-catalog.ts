@@ -19,7 +19,7 @@ import type {
   StockStatus,
 } from "@/lib/types";
 import { lineStock, type StockChangeContext } from "@/lib/orders/stock";
-import { slugify, validateCategory, validateProduct } from "@/lib/validation/product";
+import { slugify, validateCategory, validateProduct, publishProblems } from "@/lib/validation/product";
 import {
   mockAttributes,
   mockBrands,
@@ -31,6 +31,37 @@ import {
 } from "./mock/catalog";
 import { validateBrand } from "@/lib/validation/brand";
 import { matches, paginate, sortBy, type SortKey, withinDates } from "./mock-utils";
+import { mockOrders } from "./mock/orders";
+import { BULK_LIMIT, planBulkChange, type BulkOperation } from "@/lib/catalog/bulk";
+import { CSV_LIMITS } from "@/lib/catalog/csv";
+import { planProductImport } from "@/lib/catalog/csv-import";
+import { fromMinor, toMinor } from "@/lib/orders/calc";
+
+/** Applies one planned bulk change to a product in the demo store (the plan has already checked it). */
+function applyBulk(p: Product, op: BulkOperation) {
+  const percent = (minor: number, pct: number) => Number((BigInt(minor) * BigInt(Math.round(pct * 100)) * BigInt(2) + BigInt(10000)) / BigInt(20000));
+  const price = (current: number | undefined, mode: string, value: number) => {
+    if (mode === "set") return value;
+    const c = toMinor(current ?? 0);
+    const v = mode.endsWith("percent") ? percent(c, value) : toMinor(value);
+    return fromMinor(mode.startsWith("increase") ? c + v : c - v);
+  };
+  const targets: { basePrice?: number; salePrice?: number }[] = p.type === "simple" ? [p] : p.variations.filter((v) => v.status === "active");
+  switch (op.kind) {
+    case "status": p.status = op.status; break;
+    case "stock": p.stock = { ...p.stock, status: op.status }; break;
+    case "categories": p.categoryIds = op.mode === "replace" ? [...op.categoryIds] : op.mode === "add" ? [...new Set([...p.categoryIds, ...op.categoryIds])] : p.categoryIds.filter((id) => !op.categoryIds.includes(id)); break;
+    case "regularPrice": for (const t of targets) if (op.mode === "set" || t.basePrice !== undefined) t.basePrice = price(t.basePrice, op.mode, op.value); break;
+    case "salePrice":
+      for (const t of targets) {
+        if (op.mode === "clear") t.salePrice = undefined;
+        else if (t.basePrice !== undefined) t.salePrice = op.mode === "set" ? op.value : fromMinor(toMinor(t.basePrice) - percent(toMinor(t.basePrice), op.value ?? 0));
+      }
+      break;
+    case "quantities": p.quantityRule = { min: op.min ?? p.quantityRule.min, max: op.max === null ? undefined : (op.max ?? p.quantityRule.max), step: op.step ?? p.quantityRule.step }; break;
+    case "delete": break;
+  }
+}
 import type { CatalogSettingsRepository, CategoryRepository, ProductListQuery, ProductRepository, SaveResult } from "./repositories";
 import type { InventoryRow } from "@/lib/types";
 
@@ -220,7 +251,8 @@ function filterAndSort(products: Product[], q: ProductListQuery & { type?: strin
 function uniquenessErrors(input: ProductInput, ignoreId?: string): FieldErrors {
   const errors: FieldErrors = {};
   const others = mockProducts.filter((p) => p.id !== ignoreId);
-  const taken = new Set(others.flatMap((p) => [p.sku, ...p.variations.map((v) => v.sku)]).map((s) => s.toLowerCase()));
+  // Empty SKUs (allowed on drafts) never clash with each other.
+  const taken = new Set(others.flatMap((p) => [p.sku, ...p.variations.map((v) => v.sku)]).map((s) => s.trim().toLowerCase()).filter(Boolean));
   if (others.some((p) => p.slug === input.slug)) errors.slug = "Another product already uses this slug.";
   if (taken.has(input.sku.trim().toLowerCase())) errors.sku = "Another product already uses this SKU.";
   if (input.type === "variable") {
@@ -286,8 +318,7 @@ function buildProduct(id: string, input: ProductInput, existing?: Product): Prod
     weight: input.weight,
     dimensions: input.dimensions,
     shippingClassId: input.shippingClassId || undefined,
-    // Not edited by the product form: kept for the future Rules module.
-    quantityRule: existing?.quantityRule ?? { min: 1, step: 1 },
+    quantityRule: { min: input.minQuantity, max: input.maxQuantity, step: input.quantityStep },
     isVariableWeight: input.isVariableWeight,
     upsellIds: [...new Set(input.upsellIds)].filter((x) => x !== id),
     crossSellIds: [...new Set(input.crossSellIds)].filter((x) => x !== id),
@@ -497,9 +528,66 @@ export const mockProductRepository: ProductRepository = {
     mockProducts.push(copy);
     return { ok: true, value: clone(copy) };
   },
+  async importProducts(rows, apply) {
+    const { results, writes } = planProductImport(rows.slice(0, CSV_LIMITS.rows), {
+      products: mockProducts,
+      categories: mockCategories.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
+      tagName: (id) => mockTags.find((t) => t.id === id)?.name ?? id,
+    });
+    let created = 0;
+    let updated = 0;
+    if (apply) {
+      for (const w of writes) {
+        const before = w.id ? clone(mockProducts.find((p) => p.id === w.id)) : undefined;
+        const r = save(w.input, w.id);
+        if (r.ok) {
+          if (w.id) { updated++; recordStockChanges(before, r.value, { source: "product_edit", byName: "CSV import", note: "Updated by CSV import" }); }
+          else created++;
+          continue;
+        }
+        // Saved data changed since the check: report it on the rows.
+        for (const line of w.lines) {
+          const row = results.find((x) => x.line === line);
+          if (row) { row.action = "skip"; row.errors.push(...Object.values(r.errors), ...(r.message ? [r.message] : [])); }
+        }
+      }
+    } else {
+      created = writes.filter((w) => !w.id).length;
+      updated = writes.filter((w) => w.id).length;
+    }
+    return clone({ rows: results, created, updated, skipped: results.filter((r) => r.action === "skip").length });
+  },
+  async bulkChange(ids, operation, apply) {
+    const wanted = [...new Set(ids)].slice(0, BULK_LIMIT);
+    const products = wanted.map((id) => mockProducts.find((p) => p.id === id)).filter((p): p is Product => Boolean(p));
+    // Anything that still points to a product: orders, quotations, carts. DEMO: read from the other stores' memory.
+    const g = globalThis as typeof globalThis & { __mockPortal?: { quotations: { items: { productId: string }[] }[] }; __mockCarts?: Map<string, { lines: { productId: string }[] }> };
+    const inUse = new Set<string>([
+      ...mockOrders.flatMap((o) => o.items.map((i) => i.productId)),
+      ...(g.__mockPortal?.quotations ?? []).flatMap((q) => q.items.map((i) => i.productId)),
+      ...[...(g.__mockCarts?.values() ?? [])].flatMap((c) => c.lines.map((l) => l.productId)),
+    ]);
+    const rows = planBulkChange(products, operation, { categories: new Map(mockCategories.map((c) => [c.id, c.name])), inUse });
+    if (!apply) return { rows: clone(rows), applied: 0 };
+    let applied = 0;
+    for (const row of rows) {
+      if (row.problem) continue;
+      const p = mockProducts.find((x) => x.id === row.productId);
+      if (!p) continue;
+      applyBulk(p, operation);
+      if (operation.kind === "delete") mockProducts.splice(mockProducts.indexOf(p), 1);
+      else p.updatedAt = now();
+      applied++;
+    }
+    return { rows: clone(rows), applied };
+  },
   async setStatus(id, status) {
     const p = mockProducts.find((x) => x.id === id);
     if (!p) return { ok: false, errors: {}, message: "Product not found." };
+    if (status === "published") {
+      const problems = publishProblems(p);
+      if (problems.length) return { ok: false, errors: { status: problems.join(" ") } as Record<string, string>, message: `${p.name || "This product"} can't be published yet: ${problems.join(" ")}` };
+    }
     p.status = status;
     p.updatedAt = now();
     return { ok: true, value: clone(p) };

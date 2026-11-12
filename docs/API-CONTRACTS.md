@@ -139,7 +139,7 @@ Every topic asked for is under Endpoints below:
 
 ## Endpoints
 
-259 endpoints. Generated from `src/lib/data/http/endpoints.ts` and the repository signatures by `npm run docs:api`: don't edit this part by hand. "Save" endpoints return the record on success and 422 with field errors otherwise. Every list takes `page`, `perPage`, `sort`, `dir` as described above.
+273 endpoints. Generated from `src/lib/data/http/endpoints.ts` and the repository signatures by `npm run docs:api`: don't edit this part by hand. "Save" endpoints return the record on success and 422 with field errors otherwise. Every list takes `page`, `perPage`, `sort`, `dir` as described above.
 
 ### Sign-in, sessions, documents and exports
 
@@ -1153,15 +1153,15 @@ Staff price every line and set a validity date.
 
 #### `POST /customer/quotations/{id}/respond`
 
-**Permission:** customer · **Frontend call:** `quotations.respond(customerId: string, id: string, answer: "accept" \| "reject")`
+**Permission:** customer · **Frontend call:** `quotations.respond(customerId: string, id: string, answer: "accept" \| "reject", paymentMethod?: PaymentMethodId \| undefined)`
 
-Accepting creates an order at the quoted prices. An expired quote can't be accepted.
+Accepting creates an order at the quoted prices, paid by `paymentMethod`: one of the methods available at checkout. With only one available it may be left out. With none available, accepting is refused. No payment is taken.
 
-**Rule:** Accepting creates an order at the quoted prices. An expired quote is refused.
+**Rule:** Accepting creates an order at the quoted prices, unpaid, with the chosen payment method: one available at checkout (may be left out when only one is). No eligible method: 422. An expired quote is refused.
 
 **Path:** `id` (string)
 
-**Request JSON:** { answer }
+**Request JSON:** { answer, paymentMethod }
 
 ```json
 {"answer":"accept"}
@@ -1420,6 +1420,187 @@ Only from the trash.
 
 **Errors:** 401, 403, 404
 
+### contentHistory
+
+#### `GET /admin/{kind}s/{id}/revisions`
+
+**Permission:** pages.view or posts.view · **Frontend call:** `contentHistory.revisions(kind: ContentKind, id: string)`
+
+Newest first, without content. Empty until the item is first saved.
+
+**Rule:** kind is page or post; pages.* for pages, posts.* for posts. Newest first, without content. Saving a page or post records a revision when its content changed (keep the newest 25); the first save of an item with no history also keeps the version it replaced.
+
+**Path:** `kind` ([ContentKind](#contentkind)), `id` (string)
+
+**Response 200:** [ContentRevisionSummary](#contentrevisionsummary)[]
+
+**Errors:** 401, 403, 404
+
+#### `GET /admin/{kind}s/{id}/revisions/{revisionId}`
+
+**Permission:** pages.view or posts.view · **Frontend call:** `contentHistory.revision(kind: ContentKind, id: string, revisionId: string)`
+
+**Path:** `kind` ([ContentKind](#contentkind)), `id` (string), `revisionId` (string)
+
+**Response 200:** [ContentRevision](#contentrevision) or null
+
+**Errors:** 401, 403, 404
+
+#### `POST /admin/{kind}s/{id}/revisions/{revisionId}/restore`
+
+**Permission:** pages.edit or posts.edit · **Frontend call:** `contentHistory.restoreRevision(kind: ContentKind, id: string, revisionId: string)`
+
+Puts a revision's content back, keeping the item's status and publish date (a live item changes straight away; the screen asks first). Recorded as a new revision. Refused for an item in the trash or when the address is now taken.
+
+**Rule:** Puts the revision's content back and keeps the item's status and publish date, so a live item changes at once (the screen asks first). Validates like a save (the address may be taken now) and records a new revision. 409 for an item in the trash.
+
+**Path:** `kind` ([ContentKind](#contentkind)), `id` (string), `revisionId` (string)
+
+**Response 200:** { id, updatedAt }
+
+**Errors:** 401, 403, 404, 409, 422
+
+#### `PUT /admin/{kind}s/{id}/autosave`
+
+**Permission:** pages.edit or posts.edit · **Frontend call:** `contentHistory.autosave(kind: ContentKind, id: string, snapshot: ContentSnapshot)`
+
+Keeps unsaved editing work without touching the item. Saving the item discards it.
+
+**Rule:** Unsaved editing work. Never changes the item. Keep one per user per item; sanitize the HTML. Saving the item discards it. New, never-saved items autosave in the browser only.
+
+**Path:** `kind` ([ContentKind](#contentkind)), `id` (string)
+
+**Request JSON:** [ContentSnapshot](#contentsnapshot)
+
+```json
+{"title":"string","slug":"string","excerpt":"string","bodyHtml":"string","seo":{}}
+```
+
+**Response 200:** [ContentAutosave](#contentautosave)
+
+**Errors:** 401, 403, 404, 409, 422
+
+#### `GET /admin/{kind}s/{id}/autosave`
+
+**Permission:** pages.edit or posts.edit · **Frontend call:** `contentHistory.getAutosave(kind: ContentKind, id: string)`
+
+Only when it is newer than the item's last save.
+
+**Rule:** 404 unless it is newer than the item's last save and differs from it.
+
+**Path:** `kind` ([ContentKind](#contentkind)), `id` (string)
+
+**Response 200:** [ContentAutosave](#contentautosave) or null
+
+**Errors:** 401, 403, 404
+
+#### `DELETE /admin/{kind}s/{id}/autosave`
+
+**Permission:** pages.edit or posts.edit · **Frontend call:** `contentHistory.discardAutosave(kind: ContentKind, id: string)`
+
+**Path:** `kind` ([ContentKind](#contentkind)), `id` (string)
+
+**Response:** 204, no body.
+
+**Errors:** 401, 403, 404
+
+### blocks
+
+#### `GET /admin/content-blocks`
+
+**Permission:** pages.view · **Frontend call:** `blocks.list(query?: ContentBlockListQuery \| undefined)`
+
+**Rule:** usedBy counts pages and posts outside the trash whose HTML has the block's marker.
+
+**Query:**
+
+| Param | Type | Required | Notes |
+|---|---|---|---|
+| `kind` | `contact` \\| `announcement` \\| `banner` \\| `cta` \\| `productPromo` | no |  |
+| `search` | string | no |  |
+| `sort` | `name` \\| `updated` \\| `usage` | no |  |
+| `dir` | `asc` \\| `desc` | no |  |
+| `page` | number | no | 1-based page number. |
+| `perPage` | number | no |  |
+
+**Response 200:** { items, page, perPage, total, totalPages }
+
+**Errors:** 401, 403
+
+#### `GET /admin/content-blocks/{id}`
+
+**Permission:** pages.view · **Frontend call:** `blocks.getById(id: string)`
+
+**Path:** `id` (string)
+
+**Response 200:** [ContentBlock](#contentblock) or null
+
+**Errors:** 401, 403, 404
+
+#### `GET /admin/content-blocks/{id}/usage`
+
+**Permission:** pages.view · **Frontend call:** `blocks.usage(id: string)`
+
+Pages and posts (not in the trash) that contain the block.
+
+**Path:** `id` (string)
+
+**Response 200:** [ContentBlockUse](#contentblockuse)[]
+
+**Errors:** 401, 403, 404
+
+#### `PUT /admin/content-blocks/{id?}`
+
+**Permission:** pages.edit · **Frontend call:** `blocks.save(id: string \| null, input: ContentBlockInput)`
+
+Creates when `id` is null. Sanitizes the content and removes any block markers from it.
+
+**Rule:** POST when creating (pages.create). Names are unique (case-insensitive). Sanitize the HTML like page content and remove block markers from it: blocks can't contain blocks.
+
+Without the id this is `POST /admin/content-blocks` (create).
+
+**Path:** `id` (string)
+
+**Request JSON:** [ContentBlockInput](#contentblockinput)
+
+```json
+{"name":"string","bodyHtml":"string","kind":"contact"}
+```
+
+**Response 200:** [ContentBlock](#contentblock)
+
+**Errors:** 401, 403, 404, 409, 422
+
+#### `DELETE /admin/content-blocks/{id}`
+
+**Permission:** pages.delete · **Frontend call:** `blocks.remove(id: string)`
+
+Refused while a page or post uses it.
+
+**Rule:** 409 while any page or post outside the trash uses it; the message names them.
+
+**Path:** `id` (string)
+
+**Response 200:** { id }
+
+**Errors:** 401, 403, 404, 409, 422
+
+#### `GET /content-blocks`
+
+**Permission:** public · **Frontend call:** `blocks.resolve(ids: string[])`
+
+For showing pages: the blocks with these ids that exist (at most 50).
+
+**Rule:** ids: comma-separated, at most 50. Returns id, kind and bodyHtml of those that exist, for expanding markers in a page. Better: expand the markers on the server when serving pages and posts (src/lib/content/blocks.ts expandBlocks).
+
+**Query:**
+
+| Param | Type | Required | Notes |
+|---|---|---|---|
+| `ids` | string[] | yes |  |
+
+**Response 200:** { bodyHtml, id, kind }[]
+
 ### Pages
 
 #### `GET /pages/{slug}`
@@ -1625,6 +1806,42 @@ Homepage sections and About page content.
 
 ### Products and inventory
 
+#### `POST /admin/products/import`
+
+**Permission:** products.create · **Frontend call:** `products.importProducts(rows: ProductImportRow[], apply: boolean)`
+
+CSV import (src/lib/catalog/csv-import.ts). `apply: false` only checks. At most CSV_LIMITS.rows rows.
+
+**Rule:** Also needs products.edit (rows can update). Body: rows (raw text per column, at most 1000) and apply. apply false only checks. Same rules as src/lib/catalog/csv-import.ts: update by ID or SKU, only filled-in cells change, a product with any problem is skipped with its variation rows. Run large files as a background job and report per row. Schema: docs/PRODUCT-CSV.md.
+
+**Request JSON:** { rows, apply }
+
+```json
+{"rows":[{"line":0,"values":{}}],"apply":true}
+```
+
+**Response 200:** [ProductImportResult](#productimportresult)
+
+**Errors:** 401, 403, 422
+
+#### `POST /admin/products/bulk`
+
+**Permission:** products.edit · **Frontend call:** `products.bulkChange(ids: string[], operation: BulkOperation, apply: boolean)`
+
+Admin bulk change (src/lib/catalog/bulk.ts). `apply: false` only previews; `apply: true` changes the rows without a problem and skips the rest. At most BULK_LIMIT ids.
+
+**Rule:** Body: ids (at most 200), operation, apply. apply false previews; true changes rows without a problem and skips the rest, in one transaction per product. Archiving and deleting need products.delete. Deleting is refused for products that orders, quotations or carts still reference. Same rules as src/lib/catalog/bulk.ts.
+
+**Request JSON:** { ids, operation, apply }
+
+```json
+{"ids":["string"],"operation":{"kind":"status","status":"draft"},"apply":true}
+```
+
+**Response 200:** [BulkProductResult](#bulkproductresult)
+
+**Errors:** 401, 403, 422
+
 #### `GET /products`
 
 **Permission:** public · **Frontend call:** `products.list(query?: ProductListQuery \| undefined)`
@@ -1705,7 +1922,7 @@ Admin catalog rows, any status, with prices.
 |---|---|---|---|
 | `status` | `draft` \\| `published` \\| `archived` | no | Omitted = published and draft (archived only when asked for). |
 | `type` | `simple` \\| `variable` | no |  |
-| `pricing` | `missing` \\| `set` | no | "missing": not purchasable for lack of a store-currency price (simple product without a price, or an enabled variation without one) — e.g. imported products whose source price is in another currency. "set": fully priced. |
+| `pricing` | `set` \\| `missing` | no | "missing": not purchasable for lack of a store-currency price (simple product without a price, or an enabled variation without one) — e.g. imported products whose source price is in another currency. "set": fully priced. |
 | `categorySlug` | string | no | Includes products in subcategories. |
 | `categorySlugs` | string[] | no | Limit to products in ANY of these categories (subcategories included); combined with `categorySlug` (AND). |
 | `brandSlugs` | string[] | no | Products carrying ANY of these brands. |
@@ -1741,7 +1958,7 @@ Admin: full product including drafts/archived and prices.
 **Request JSON:** [ProductInput](#productinput)
 
 ```json
-{"type":"simple","name":"string","slug":"string","sku":"string","shortDescription":"string","description":"string","status":"draft","visibility":"visible","featured":true,"categoryIds":["string"],"tags":["string"],"brandIds":["string"],"images":[{"src":"string","alt":"string","width":0,"height":0}],"unitLabel":"string","taxStatus":"none","taxClass":"standard","manageStock":true,"stockStatus":"low_stock","backorders":"no","soldIndividually":true,"weight":{"value":0,"unit":"kg"},"isVariableWeight":true,"attributes":[{"name":"string","values":["string"],"visible":true,"variation":true}],"defaultAttributes":{},"variations":[{"sku":"string","attributes":{},"status":"active","gallery":["<ProductImage>"],"stockMode":"status","stockStatus":"low_stock"}],"upsellIds":["string"],"crossSellIds":["string"],"menuOrder":0,"reviewsEnabled":true}
+{"minQuantity":0,"quantityStep":0,"type":"simple","name":"string","slug":"string","sku":"string","shortDescription":"string","description":"string","status":"draft","visibility":"visible","featured":true,"categoryIds":["string"],"tags":["string"],"brandIds":["string"],"images":[{"src":"string","alt":"string","width":0,"height":0}],"unitLabel":"string","taxStatus":"none","taxClass":"standard","manageStock":true,"stockStatus":"low_stock","backorders":"no","soldIndividually":true,"weight":{"value":0,"unit":"kg"},"isVariableWeight":true,"attributes":[{"name":"string","values":["string"],"visible":true,"variation":true}],"defaultAttributes":{},"variations":[{"sku":"string","attributes":{},"status":"active","gallery":["<ProductImage>"],"stockMode":"status","stockStatus":"low_stock"}],"upsellIds":["string"],"crossSellIds":["string"],"menuOrder":0,"reviewsEnabled":true}
 ```
 
 **Response 200:** [Product](#product)
@@ -1759,7 +1976,7 @@ Stock changes made by the edit are recorded in the stock movement history under 
 **Request JSON:** [ProductInput](#productinput)
 
 ```json
-{"type":"simple","name":"string","slug":"string","sku":"string","shortDescription":"string","description":"string","status":"draft","visibility":"visible","featured":true,"categoryIds":["string"],"tags":["string"],"brandIds":["string"],"images":[{"src":"string","alt":"string","width":0,"height":0}],"unitLabel":"string","taxStatus":"none","taxClass":"standard","manageStock":true,"stockStatus":"low_stock","backorders":"no","soldIndividually":true,"weight":{"value":0,"unit":"kg"},"isVariableWeight":true,"attributes":[{"name":"string","values":["string"],"visible":true,"variation":true}],"defaultAttributes":{},"variations":[{"sku":"string","attributes":{},"status":"active","gallery":["<ProductImage>"],"stockMode":"status","stockStatus":"low_stock"}],"upsellIds":["string"],"crossSellIds":["string"],"menuOrder":0,"reviewsEnabled":true}
+{"minQuantity":0,"quantityStep":0,"type":"simple","name":"string","slug":"string","sku":"string","shortDescription":"string","description":"string","status":"draft","visibility":"visible","featured":true,"categoryIds":["string"],"tags":["string"],"brandIds":["string"],"images":[{"src":"string","alt":"string","width":0,"height":0}],"unitLabel":"string","taxStatus":"none","taxClass":"standard","manageStock":true,"stockStatus":"low_stock","backorders":"no","soldIndividually":true,"weight":{"value":0,"unit":"kg"},"isVariableWeight":true,"attributes":[{"name":"string","values":["string"],"visible":true,"variation":true}],"defaultAttributes":{},"variations":[{"sku":"string","attributes":{},"status":"active","gallery":["<ProductImage>"],"stockMode":"status","stockStatus":"low_stock"}],"upsellIds":["string"],"crossSellIds":["string"],"menuOrder":0,"reviewsEnabled":true}
 ```
 
 **Response 200:** [Product](#product)
@@ -3053,7 +3270,7 @@ Customer checkout from their server-side cart: re-prices every line for the cust
 **Request JSON:** [CheckoutInput](#checkoutinput)
 
 ```json
-{"shippingAddressId":"string","paymentMethod":"bank_transfer","idempotencyKey":"string"}
+{"shippingAddressId":"string","paymentMethod":"pay_on_delivery","idempotencyKey":"string"}
 ```
 
 **Response 200:** [Order](#order)
@@ -3097,7 +3314,7 @@ What `checkout` would create, without saving (totals for the checkout page).
 **Request JSON:** { shippingAddressId, shippingMethodId, billingAddressId, paymentMethod, requestedDeliveryDate, customerNote }
 
 ```json
-{"shippingAddressId":"string","paymentMethod":"bank_transfer"}
+{"shippingAddressId":"string","paymentMethod":"pay_on_delivery"}
 ```
 
 **Response 200:** [CheckoutPreview](#checkoutpreview)
@@ -3850,7 +4067,7 @@ Saves a new display order; `ids` must list every method exactly once.
 **Request JSON:** { ids }
 
 ```json
-{"ids":["bank_transfer"]}
+{"ids":["pay_on_delivery"]}
 ```
 
 **Response 200:** [PaymentMethodListItem](#paymentmethodlistitem)[]
@@ -4261,6 +4478,38 @@ An image chosen for branding. Width and height keep the layout stable.
 | `showOnHome` | boolean | yes |  |
 | `displayOrder` | number | yes |  |
 
+### BulkChange
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `label` | string | yes | Readable field, e.g. "Price" or "Price · 5 kg". |
+| `before` | string or number or null | yes |  |
+| `after` | string or number or null | yes |  |
+| `money` | boolean | no | The values are amounts of money (the screen formats them). |
+
+### BulkOperation
+
+Type: { kind, status } or { kind, status } or { kind, mode, categoryIds } or { kind, mode, value } or { kind, mode, value } or { kind, min, max, step } or { kind }
+
+### BulkProductResult
+
+POST /admin/products/bulk response: one row per product, and how many were changed.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `rows` | [BulkRow](#bulkrow)[] | yes |  |
+| `applied` | number | yes |  |
+
+### BulkRow
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `productId` | string | yes |  |
+| `name` | string | yes |  |
+| `sku` | string | yes |  |
+| `changes` | [BulkChange](#bulkchange)[] | yes |  |
+| `problem` | string | no | Why this product is skipped. |
+
 ### ButtonStyle
 
 Type: `rounded` \| `pill` \| `square`
@@ -4590,6 +4839,74 @@ What the public contact form sends.
 
 Type: `general` \| `products` \| `account` \| `orders` \| `other`
 
+### ContentAutosave
+
+Unsaved editing work kept by the server while someone edits. It never changes the page or post itself: the editor offers it back when it is newer than the saved version. The demo keeps one per item; the backend keeps one per user per item.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `kind` | [ContentKind](#contentkind) | yes |  |
+| `itemId` | string | yes |  |
+| `savedAt` | string | yes |  |
+| `authorName` | string | yes |  |
+| `snapshot` | [ContentSnapshot](#contentsnapshot) | yes |  |
+
+### ContentBlock
+
+Reusable content written once and inserted into many pages or posts. Editing it changes every page that uses it.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `id` | string | yes |  |
+| `name` | string | yes |  |
+| `kind` | [ContentBlockKind](#contentblockkind) | yes |  |
+| `bodyHtml` | string | yes | Sanitized like page content. Can't contain other blocks. |
+| `authorName` | string | yes |  |
+| `createdAt` | string | yes |  |
+| `updatedAt` | string | yes |  |
+
+### ContentBlockInput
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | string | yes |  |
+| `bodyHtml` | string | yes | Sanitized like page content. Can't contain other blocks. |
+| `kind` | [ContentBlockKind](#contentblockkind) | yes |  |
+
+### ContentBlockKind
+
+Type: `contact` \| `announcement` \| `banner` \| `cta` \| `productPromo`
+
+### ContentBlockSummary
+
+A block in the admin list, with how many pages and posts (not in the trash) use it.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `id` | string | yes |  |
+| `name` | string | yes |  |
+| `kind` | [ContentBlockKind](#contentblockkind) | yes |  |
+| `bodyHtml` | string | yes | Sanitized like page content. Can't contain other blocks. |
+| `authorName` | string | yes |  |
+| `createdAt` | string | yes |  |
+| `updatedAt` | string | yes |  |
+| `usedBy` | number | yes |  |
+
+### ContentBlockUse
+
+A page or post that contains a block.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `kind` | [ContentKind](#contentkind) | yes |  |
+| `id` | string | yes |  |
+| `title` | string | yes |  |
+| `status` | [ContentStatus](#contentstatus) | yes |  |
+
+### ContentKind
+
+Type: `page` \| `post`
+
 ### ContentPage
 
 | Field | Type | Required | Notes |
@@ -4622,6 +4939,53 @@ Type: `general` \| `products` \| `account` \| `orders` \| `other`
 | `status` | [ContentStatus](#contentstatus) | yes |  |
 | `seo` | [SeoFields](#seofields) | yes |  |
 | `visibility` | [PageVisibility](#pagevisibility) | yes |  |
+
+### ContentRevision
+
+One saved version of a page or post. Kept on every save that changes the content (the newest 25 per item).
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `id` | string | yes |  |
+| `kind` | [ContentKind](#contentkind) | yes |  |
+| `itemId` | string | yes |  |
+| `createdAt` | string | yes |  |
+| `authorName` | string | yes |  |
+| `status` | [ContentStatus](#contentstatus) | yes | The item's status right after this version was saved. |
+| `note` | string | yes | "Saved", "Original version" or "Restored from …". |
+| `snapshot` | [ContentSnapshot](#contentsnapshot) | yes |  |
+
+### ContentRevisionSummary
+
+A revision in the history list, without its content.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `id` | string | yes |  |
+| `createdAt` | string | yes |  |
+| `authorName` | string | yes |  |
+| `status` | [ContentStatus](#contentstatus) | yes | The item's status right after this version was saved. |
+| `kind` | [ContentKind](#contentkind) | yes |  |
+| `itemId` | string | yes |  |
+| `note` | string | yes | "Saved", "Original version" or "Restored from …". |
+| `title` | string | yes |  |
+| `words` | number | yes |  |
+
+### ContentSnapshot
+
+The editable fields of a page or post, as kept in a revision or an autosave. Status and dates aren't part of it.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `title` | string | yes |  |
+| `slug` | string | yes |  |
+| `excerpt` | string | yes |  |
+| `bodyHtml` | string | yes |  |
+| `image` | [ProductImage](#productimage) | no |  |
+| `seo` | [SeoFields](#seofields) | yes |  |
+| `visibility` | `public` \\| `customers` | no | Pages only. |
+| `categories` | string[] | no | Posts only. |
+| `tags` | string[] | no |  |
 
 ### ContentStatus
 
@@ -5049,6 +5413,8 @@ Type: `customer_registered` \| `customer_approved` \| `password_reset` \| `order
 | `secondaryCta` | [CtaLink](#ctalink) or null | no | Optional text link next to the button, such as "Open a trade account". |
 | `image` | [SiteImage](#siteimage) or null | yes | With an image the slide uses the photo layout: the photo fills it and the copy sits on a frosted card. |
 | `imageDark` | [SiteImage](#siteimage) or null | no | The photo for the dark theme. Without one, the light photo is used in both. |
+| `imageMobile` | [SiteImage](#siteimage) or null | no | Optional photos for phones (under 640px wide), usually portrait. Without them phones show the banner photos, cropped. |
+| `imageMobileDark` | [SiteImage](#siteimage) or null | no | Phone photo for the dark theme. Without one, the phone light-theme photo is used (or the dark banner if there is no phone photo). |
 | `icons` | string[] | yes | Shown when there is no image. |
 
 ### HomeSection
@@ -5376,7 +5742,7 @@ Audit record of an admin changing an order: an item's price, weight or quantity,
 
 What an admin changed on an order (audit history).
 
-Type: `shipping` \| `adjust` \| `add` \| `remove` \| `replace` \| `discount` \| `delivery_date` \| `address`
+Type: `add` \| `replace` \| `remove` \| `shipping` \| `adjust` \| `discount` \| `delivery_date` \| `address`
 
 ### OrderChangeValues
 
@@ -5628,11 +5994,11 @@ Type: `public` \| `customers`
 
 ### PaymentMethod
 
-Type: `invoice` \| `cash_on_delivery` \| `bank_transfer` \| `mobile_wallet`
+Type: `invoice` \| `bank_transfer` \| `cash_on_delivery` \| `mobile_wallet`
 
 ### PaymentMethodId
 
-Type: `bank_transfer` \| `pay_on_delivery` \| `online`
+Type: `pay_on_delivery` \| `bank_transfer` \| `online`
 
 ### PaymentMethodInput
 
@@ -5659,7 +6025,7 @@ Editable fields. Connection state is never editable from the browser.
 | `instructions` | string | yes | Shown to the customer after choosing the method / on the order confirmation. |
 | `bank` | [BankAccountDetails](#bankaccountdetails) | no | Bank Transfer only. |
 | `online` | [OnlinePaymentConnection](#onlinepaymentconnection) | no | Online Payment only. |
-| `orderPaymentMethod` | `invoice` \\| `cash_on_delivery` \\| `bank_transfer` \\| `mobile_wallet` | no | Order payment method recorded when a customer uses this option (no payment status change). |
+| `orderPaymentMethod` | `invoice` \\| `bank_transfer` \\| `cash_on_delivery` \\| `mobile_wallet` | no | Order payment method recorded when a customer uses this option (no payment status change). |
 | `legacyWooGatewayId` | string | no | Gateway id in the old store (e.g. "cod", "bacs"), for migration. |
 | `updatedAt` | string | yes |  |
 
@@ -5675,7 +6041,7 @@ Editable fields. Connection state is never editable from the browser.
 | `instructions` | string | yes | Shown to the customer after choosing the method / on the order confirmation. |
 | `bank` | [BankAccountDetails](#bankaccountdetails) | no | Bank Transfer only. |
 | `online` | [OnlinePaymentConnection](#onlinepaymentconnection) | no | Online Payment only. |
-| `orderPaymentMethod` | `invoice` \\| `cash_on_delivery` \\| `bank_transfer` \\| `mobile_wallet` | no | Order payment method recorded when a customer uses this option (no payment status change). |
+| `orderPaymentMethod` | `invoice` \\| `bank_transfer` \\| `cash_on_delivery` \\| `mobile_wallet` | no | Order payment method recorded when a customer uses this option (no payment status change). |
 | `legacyWooGatewayId` | string | no | Gateway id in the old store (e.g. "cod", "bacs"), for migration. |
 | `updatedAt` | string | yes |  |
 
@@ -5725,6 +6091,12 @@ Type: { type, amount } or { type, amount } or { type, percent }
 | `reason` | string | yes |  |
 | `tier` | [PriceTier](#pricetier) | no |  |
 | `unitPrice` | number | no |  |
+
+### PriceMode
+
+How a regular price changes: set it, or raise / lower it by a percentage or an amount.
+
+Type: `set` \| `increase_percent` \| `decrease_percent` \| `increase_fixed` \| `decrease_fixed`
 
 ### PriceResolution
 
@@ -5887,10 +6259,42 @@ An attribute on one product: a store-wide attribute or a product-specific (custo
 | `width` | number | yes |  |
 | `height` | number | yes |  |
 
+### ProductImportResult
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `rows` | [ProductImportRowResult](#productimportrowresult)[] | yes |  |
+| `created` | number | yes |  |
+| `updated` | number | yes |  |
+| `skipped` | number | yes |  |
+
+### ProductImportRow
+
+One file row after column matching: raw text per field. The server parses and checks every value.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `line` | number | yes | Line in the file (the header is line 1). |
+| `values` | { description, name, id, type, status, categories, sku, parentSku, regularPrice, salePrice, manageStock, stock, stockStatus, weight, weightUnit, unitLabel, minQuantity, maxQuantity, quantityStep, pricedByWeight, taxClass, shortDescription, attributeName, attributeValues } | yes |  |
+
+### ProductImportRowResult
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `line` | number | yes |  |
+| `sku` | string | yes |  |
+| `name` | string | yes |  |
+| `action` | `create` \\| `update` \\| `skip` | yes |  |
+| `errors` | string[] | yes | Why the row is skipped. |
+| `warnings` | string[] | yes | Imported, but worth knowing. |
+
 ### ProductInput
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
+| `minQuantity` | number | yes | Order limits in packages (see QuantityRule). `quantityStep` 1 = no increment. |
+| `maxQuantity` | number | no |  |
+| `quantityStep` | number | yes |  |
 | `type` | [ProductType](#producttype) | yes |  |
 | `name` | string | yes |  |
 | `slug` | string | yes |  |
@@ -5961,11 +6365,11 @@ Lightweight shape for public listings; keeps list payloads small.
 | `id` | string | yes |  |
 | `slug` | string | yes |  |
 | `sku` | string | yes |  |
-| `shortDescription` | string | yes |  |
-| `unitLabel` | string | yes | Selling unit shown to customers, e.g. "case", "bag", "pack". |
-| `basePrice` | number | no | Simple products: admin responses only. |
 | `stock` | [StockInfo](#stockinfo) | yes | Current stock; `status` is derived by the backend when the quantity is tracked. |
 | `weight` | [Weight](#weight) | yes |  |
+| `unitLabel` | string | yes | Selling unit shown to customers, e.g. "case", "bag", "pack". |
+| `shortDescription` | string | yes |  |
+| `basePrice` | number | no | Simple products: admin responses only. |
 | `isVariableWeight` | boolean | yes | Priced per kg and adjusted after packing (e.g. fresh meat). Final amount can change. |
 | `categoryIds` | string[] | yes |  |
 | `image` | [ProductImage](#productimage) | no |  |
@@ -6043,19 +6447,20 @@ Per-line minimum/maximum quantity. Category rules apply to each matching line, n
 |---|---|---|---|
 | `min` | number | yes |  |
 | `max` | number | no |  |
+| `step` | number | no | Order in multiples of this (the product's own setting; rules don't change it). |
 | `rule` | [QuantityLimitRule](#quantitylimitrule) | no |  |
 | `candidates` | { rule, outcome, reason }[] | yes |  |
 | `explanation` | string | yes |  |
 
 ### QuantityRule
 
-Per-product ordering settings. `step` (pack multiple) is still a product setting. `min`/`max` are LEGACY: per-line limits now come from quantity rules (QuantityLimitRule, resolved by src/lib/pricing/engine.ts); the seeded values were migrated there.
+The product's own order limits, counted in PACKAGES (bags, cases, cartons), never in weight. Precedence (resolveQuantityLimits in src/lib/pricing/engine.ts): a quantity rule for the option or the product overrides them; these beat a category or store-wide rule (a minimum of 1 counts as "not set"); whatever is still empty comes from the rule, then the default (at least 1, no maximum). The step always comes from here.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `min` | number | yes |  |
-| `max` | number | no |  |
-| `step` | number | yes |  |
+| `min` | number | yes | Minimum packages per order line. At least 1. |
+| `max` | number | no | Maximum packages per order line. Empty = no limit. |
+| `step` | number | yes | Order in multiples of this many packages. 1 = any whole number (the normal case). |
 
 ### QuantityRuleListItem
 
@@ -6087,12 +6492,12 @@ One orderable option (a simple product or one active variation) on the quick ord
 | `variationId` | string | no |  |
 | `slug` | string | yes |  |
 | `sku` | string | yes |  |
+| `stockStatus` | [StockStatus](#stockstatus) | yes |  |
 | `unitLabel` | string | yes |  |
 | `minQuantity` | number | yes |  |
 | `maxQuantity` | number | no |  |
-| `variationLabel` | string | no |  |
 | `pricedByWeight` | boolean | yes |  |
-| `stockStatus` | [StockStatus](#stockstatus) | yes |  |
+| `variationLabel` | string | no |  |
 | `unitPrice` | number | no |  |
 | `priceNote` | string | no | e.g. "Your price", "Sale price", a tier label. |
 | `step` | number | yes |  |
@@ -6500,6 +6905,10 @@ Everything the "Test rules" panel shows. DEMO calculation — the backend enforc
 | `price` | [PriceResolution](#priceresolution) | no | Undefined when no customer was given (quantity limits only). |
 | `limits` | [QuantityLimits](#quantitylimits) | yes |  |
 | `quantityError` | string | no |  |
+
+### SaleMode
+
+Type: `set` \| `percent_off` \| `clear`
 
 ### SavedList
 

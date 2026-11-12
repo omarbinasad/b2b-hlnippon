@@ -22,7 +22,7 @@ const DROP_WITH_CONTENT = "script|style|iframe|object|embed|noscript|template|sv
 const escapeText = (text: string) =>
   text.replace(/&(?!(?:#\d{1,7}|#x[0-9a-f]{1,6}|[a-z][a-z0-9]{1,31});)/gi, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-const RICH_ALLOWED = new Set([...ALLOWED, "a", "img"]);
+const RICH_ALLOWED = new Set([...ALLOWED, "a", "img", "div"]);
 const RICH_VOID = new Set([...VOID, "img"]);
 /** Site-relative paths, or http(s). Everything else (javascript:, data:, protocol-relative) is dropped. */
 const SAFE_SRC = /^(?:https?:\/\/|\/(?!\/))/i;
@@ -37,6 +37,18 @@ function attr(tag: string, name: string) {
 
 /** A URL with whitespace and control characters removed: browsers ignore them, so "java\tscript:" must not pass. */
 const urlAttr = (tag: string, name: string) => attr(tag, name)?.replace(/[\u0000-\u0020\u007f]+/g, "");
+
+/** Reusable blocks (src/lib/content/blocks.ts): an empty marker in page HTML, and the wrapper a block renders in. */
+const BLOCK_ID = /^blk-[a-z0-9-]{1,40}$/;
+const BLOCK_KINDS = new Set(["announcement", "banner", "cta", "contact", "productPromo"]);
+
+/** A div survives only as a block marker (returned whole, closed) or a block wrapper. Null drops the tag, keeping its text. */
+function richDiv(tag: string): { marker: string } | { open: string } | null {
+  const id = attr(tag, "data-block");
+  if (id !== undefined) return BLOCK_ID.test(id) ? { marker: `<div data-block="${id}" data-name="${escapeAttr((attr(tag, "data-name") ?? "").slice(0, 80))}"></div>` } : null;
+  const kind = attr(tag, "data-block-kind");
+  return kind && BLOCK_KINDS.has(kind) ? { open: `<div data-block-kind="${kind}">` } : null;
+}
 
 /** Attributes kept for editor content: links, images and text alignment only. Null drops the element. */
 function richAttrs(tag: string, name: string) {
@@ -84,6 +96,13 @@ export function sanitizeHtml(input: string | null | undefined, rich = false): st
       const at = open.lastIndexOf(tag);
       if (at === -1) continue;
       while (open.length > at) out.push(`</${open.pop()}>`);
+    } else if (tag === "div") {
+      const d = richDiv(m[0]);
+      if (d && "marker" in d) out.push(d.marker);
+      else if (d) {
+        out.push(d.open);
+        open.push(tag);
+      }
     } else if ((rich ? RICH_VOID : VOID).has(tag)) {
       const attrs = rich ? richAttrs(m[0], tag) : "";
       if (attrs !== null) out.push(`<${tag}${attrs}>`);

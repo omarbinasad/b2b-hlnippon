@@ -6,12 +6,14 @@
  * mutation — today these actions are as open as the rest of the preview admin.
  */
 import type { Route } from "next";
+import { CSV_LIMITS, PRODUCT_CSV_FIELDS } from "@/lib/catalog/csv";
+import { BULK_LIMIT, type BulkOperation, type BulkRow } from "@/lib/catalog/bulk";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { actorWith, getAdminActor } from "@/lib/auth/session";
 import { repositories } from "@/lib/data";
 import { productStatuses } from "@/lib/enums";
-import type { AttributeValue, Brand, Category, Dimensions, FieldErrors, ProductInput, ProductPick, ProductStatus, VariationInput } from "@/lib/types";
+import type { AttributeValue, Brand, Category, Dimensions, FieldErrors, ProductInput, ProductPick, ProductStatus, VariationInput, ProductImportResult, ProductImportRow } from "@/lib/types";
 import { slugify } from "@/lib/validation/product";
 
 export type SaveProductState =
@@ -121,6 +123,9 @@ function toProductInput(raw: unknown): ProductInput {
     backorders: oneOf(o.backorders, BACKORDERS, "no"),
     lowStockThreshold: num(o.lowStockThreshold),
     soldIndividually: o.soldIndividually === true,
+    minQuantity: num(o.minQuantity) ?? 1,
+    maxQuantity: num(o.maxQuantity),
+    quantityStep: num(o.quantityStep) ?? 1,
     initialStock: num(o.initialStock),
     unitOfMeasure: optStr(o.unitOfMeasure, 50),
     weight: weight(o.weight),
@@ -158,6 +163,61 @@ export async function saveProductAction(id: string | null, raw: ProductInput): P
   revalidatePath("/admin/products");
   if (!id) redirect(`/admin/products/${result.value.id}/edit?notice=created` as Route);
   return { ok: true, savedAt: result.value.updatedAt };
+}
+
+const BULK_KINDS = ["status", "stock", "categories", "regularPrice", "salePrice", "quantities", "delete"] as const;
+const PRICE_MODES = ["set", "increase_percent", "decrease_percent", "increase_fixed", "decrease_fixed"] as const;
+
+/** Untrusted bulk operation → a known shape, or null. */
+function bulkOperation(raw: unknown): BulkOperation | null {
+  const o = obj(raw);
+  const kind = oneOf(o.kind, BULK_KINDS, "status");
+  if (o.kind !== kind) return null;
+  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : Number.NaN);
+  switch (kind) {
+    case "status": return { kind, status: oneOf(o.status, productStatuses, "draft") };
+    case "stock": return { kind, status: o.status === "out_of_stock" ? "out_of_stock" : "in_stock" };
+    case "categories": return { kind, mode: oneOf(o.mode, ["add", "replace", "remove"] as const, "add"), categoryIds: ids(o.categoryIds) };
+    case "regularPrice": return { kind, mode: oneOf(o.mode, PRICE_MODES, "set"), value: n(o.value) };
+    case "salePrice": return { kind, mode: oneOf(o.mode, ["set", "percent_off", "clear"] as const, "set"), value: o.value === undefined ? undefined : n(o.value) };
+    case "quantities": return { kind, min: o.min === undefined ? undefined : n(o.min), max: o.max === null ? null : o.max === undefined ? undefined : n(o.max), step: o.step === undefined ? undefined : n(o.step) };
+    case "delete": return { kind };
+  }
+}
+
+/** Archiving and deleting remove products from the store; everything else edits them. */
+const bulkCapability = (op: BulkOperation) => (op.kind === "delete" || (op.kind === "status" && op.status === "archived") ? "products.delete" : "products.edit");
+
+export type BulkResult = { ok: true; rows: BulkRow[]; applied: number } | { ok: false; message: string };
+
+/** Preview (`apply` false) or apply a bulk change to the selected products. DEMO: server memory. */
+export async function bulkProductsAction(selected: unknown, raw: unknown, apply: boolean): Promise<BulkResult> {
+  const op = bulkOperation(raw);
+  if (!op) return { ok: false, message: "Unknown change." };
+  if (!(await actorWith(bulkCapability(op)))) return { ok: false, message: "You don't have permission to do this." };
+  const chosen = ids(selected).slice(0, BULK_LIMIT);
+  if (!chosen.length) return { ok: false, message: "Select at least one product." };
+  const r = await repositories.products.bulkChange(chosen, op, apply === true);
+  if (apply) revalidatePath("/", "layout");
+  return { ok: true, ...r };
+}
+
+export type ImportResult = { ok: true; result: ProductImportResult } | { ok: false; message: string };
+
+/** Check (`apply` false) or run a product CSV import. Rows come from the browser, so every value is checked again. */
+export async function importProductsAction(raw: unknown, apply: boolean): Promise<ImportResult> {
+  if (!(await actorWith("products.create")) || !(await actorWith("products.edit"))) return { ok: false, message: "Importing needs permission to add and edit products." };
+  const keys = new Set<string>(PRODUCT_CSV_FIELDS.map((f) => f.key));
+  const rows: ProductImportRow[] = arr(raw, CSV_LIMITS.rows).map((r) => {
+    const o = obj(r);
+    const values: ProductImportRow["values"] = {};
+    for (const [k, v] of Object.entries(obj(o.values))) if (keys.has(k) && typeof v === "string") values[k as keyof typeof values] = v.slice(0, 5000);
+    return { line: Number.isInteger(o.line) ? (o.line as number) : 0, values };
+  });
+  if (!rows.length) return { ok: false, message: "The file has no product rows." };
+  const result = await repositories.products.importProducts(rows, apply === true);
+  if (apply) revalidatePath("/", "layout");
+  return { ok: true, result };
 }
 
 /** Product search for pickers (linked products, category assignment). Returns at most 10 matches. */

@@ -22,7 +22,7 @@ export default async function ProductPage({ params }: PageProps<"/shop/[slug]">)
   if (!product) notFound();
 
   const { quantityRule: rule } = product;
-  // Per-line limits come from quantity rules (shown for the product itself; variations can differ).
+  // Per-line limits: the product's own minimum, maximum and multiple, overridden by quantity rules (variations can differ).
   const limits = await repositories.quantityRules.effectiveFor(product.id);
   // Approved customers get their own prices and the cart; everyone else sees product data only.
   const customerId = await getShoppingCustomerId();
@@ -61,7 +61,7 @@ export default async function ProductPage({ params }: PageProps<"/shop/[slug]">)
             <dt className="text-muted">Minimum order</dt>
             <dd>{limits?.min ?? 1} {product.unitLabel}</dd>
             <dt className="text-muted">Order in multiples of</dt>
-            <dd>{rule.step}</dd>
+            <dd>{limits?.step ?? rule.step}</dd>
             {limits?.max !== undefined && (
               <>
                 <dt className="text-muted">Maximum per order</dt>
@@ -86,7 +86,7 @@ export default async function ProductPage({ params }: PageProps<"/shop/[slug]">)
             <AddToCart
               productId={product.id}
               unitLabel={product.unitLabel}
-              step={rule.step}
+              step={limits?.step ?? rule.step}
               options={orderable.options.map((o) => ({
                 variationId: o.variationId,
                 label: o.label,

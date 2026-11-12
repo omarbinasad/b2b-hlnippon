@@ -7,7 +7,7 @@ import { Field, Input } from "@/components/ui/field";
 import { RegionField } from "@/components/ui/region-field";
 import type { Address, AddressInput, FieldErrors, PostcodeLookup } from "@/lib/types";
 import { siteConfig } from "@/config/site";
-import { isPostcode } from "@/lib/customers/contact";
+import { isPostcode, postcodeInput } from "@/lib/customers/contact";
 
 const blank: AddressInput = {
   type: "shipping",
@@ -113,11 +113,11 @@ export function AddressForm({
             <Field id={`${p}-postalCode`} label={addressLabels().postcode} required error={errors.postalCode}>
               <Input
                 id={`${p}-postalCode`}
-                inputMode="numeric"
-                maxLength={4}
+                inputMode={postcodeInput().inputMode}
+                maxLength={postcodeInput().maxLength}
                 value={values.postalCode}
                 onChange={(e) => {
-                  set("postalCode", e.target.value.replace(/\D/g, ""));
+                  set("postalCode", postcodeInput().clean(e.target.value));
                   setLookup(null);
                 }}
                 aria-invalid={Boolean(errors.postalCode)}

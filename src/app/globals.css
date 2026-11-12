@@ -429,7 +429,8 @@ html[data-nav="loading"] .nav-spinner {
 /* The phone menu (mobile-bottom-nav.tsx): page content and floating buttons stay clear of it. */
 @media (width < 48rem) {
   body:has([data-bottom-nav]) {
-    --bottom-nav-h: calc(3.75rem + env(safe-area-inset-bottom));
+    /* 4rem bar + 0.75rem gap below it (the bar floats). */
+    --bottom-nav-h: calc(4.75rem + env(safe-area-inset-bottom));
     padding-bottom: var(--bottom-nav-h);
   }
 }
@@ -447,4 +448,59 @@ html[data-nav="loading"] .nav-spinner {
     inset: 0 0 auto 0;
     border: 0;
   }
+}
+
+/*
+  Reusable content blocks (src/lib/content/blocks.ts). On the site a block renders inside <div data-block-kind="…">; in
+  the editor it is an empty marker shown as a labelled box.
+*/
+[data-block-kind] {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-ui, 0.5rem);
+  padding: 1rem 1.25rem;
+  background: var(--surface-muted);
+}
+[data-block-kind] > * + * {
+  margin-top: 0.5rem;
+}
+[data-block-kind="announcement"] {
+  border-color: var(--info);
+  background: var(--info-soft);
+}
+[data-block-kind="banner"],
+[data-block-kind="productPromo"] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+[data-block-kind="cta"] {
+  border-color: var(--warning);
+  background: var(--warning-soft);
+}
+[data-block-kind="cta"] a,
+[data-block-kind="productPromo"] a {
+  display: inline-block;
+  border-radius: var(--radius-ui, 0.5rem);
+  background: var(--brand);
+  color: var(--brand-contrast);
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+.cms-editor div[data-block] {
+  margin: 0.75rem 0;
+  border: 1px dashed var(--brand);
+  border-radius: var(--radius-ui, 0.5rem);
+  background: var(--brand-soft);
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--foreground);
+  cursor: grab;
+}
+.cms-editor div[data-block]::before {
+  content: "Reusable block: " attr(data-name);
+}
+.cms-editor div[data-block].ProseMirror-selectednode {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }

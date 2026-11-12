@@ -11,6 +11,8 @@ import { mockOrders } from "./mock/orders";
 import { mockDeliveryRoutes } from "./mock/pricing-delivery";
 import { mockCartRepository } from "./mock-cart";
 import { mockOrderRepository } from "./mock-orders";
+import { mockPaymentSettingsRepository } from "./mock-payments";
+import { orderPaymentMethod } from "@/lib/orders/cart";
 import { clone, now } from "./mock-store-helpers";
 import { matches, paginate, sortBy } from "./mock-utils";
 import { mockReminderRepository } from "./mock-notify";
@@ -208,7 +210,7 @@ export const mockQuotationRepository: QuotationRepository = {
     event(q, "declined", actor.name, reason.trim());
     return { ok: true, value: clone(q) };
   },
-  async respond(customerId, id, answer, actor) {
+  async respond(customerId, id, answer, actor, paymentMethod) {
     const q = db.quotations.find((x) => x.id === id && x.customerId === customerId);
     if (!q) return fail("That quotation wasn't found.");
     expireIfDue(q);
@@ -222,6 +224,14 @@ export const mockQuotationRepository: QuotationRepository = {
     const shipping = customer?.addresses.find((a) => a.type === "shipping" && a.isDefault) ?? customer?.addresses.find((a) => a.type === "shipping");
     const billing = customer?.addresses.find((a) => a.type === "billing" && a.isDefault) ?? shipping;
     if (!shipping || !billing) return fail("Add a delivery address to your account first.");
+    // The same methods as checkout, never a forced default.
+    const methods = await mockPaymentSettingsRepository.checkoutMethods();
+    if (!methods.length) return fail("No payment method is available right now, so the order can't be created. Please contact us to complete it.", { paymentMethod: "No payment method is available." });
+    const chosen = paymentMethod ?? (methods.length === 1 ? methods[0].id : undefined);
+    if (!chosen) return fail("Choose how you'll pay.", { paymentMethod: "Choose how you'll pay." });
+    if (!methods.some((m) => m.id === chosen)) return fail("That payment method isn't available. Choose another.", { paymentMethod: "Choose an available payment method." });
+    const orderMethod = orderPaymentMethod[chosen];
+    if (!orderMethod) return fail("That payment method can't be used for an order.", { paymentMethod: "Choose another payment method." });
     const order = await mockOrderRepository.create(
       {
         customerId,
@@ -229,7 +239,7 @@ export const mockQuotationRepository: QuotationRepository = {
         shippingAddress: shipping,
         items: q.items.map((i) => ({ productId: i.productId, variationId: i.variationId, quantity: i.quantity, unitPrice: i.quotedUnitPrice ?? 0, discount: 0 })),
         shipping: { label: "To be confirmed", amount: 0, mode: "manual", reason: `From quotation ${q.number}` },
-        paymentMethod: "bank_transfer",
+        paymentMethod: orderMethod,
         customerNote: q.customerNote,
         adminNote: `Created from quotation ${q.number}. Delivery charge to be confirmed.`,
       },

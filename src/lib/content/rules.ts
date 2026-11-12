@@ -1,5 +1,6 @@
 /** Pure publishing rules for pages and posts, shared by the forms and the mock. The backend must enforce the same. */
 import { htmlToText, sanitizeRichHtml } from "../html/sanitize.ts";
+import { blockIdsIn } from "./blocks.ts";
 import type { ContentInput, ContentStatus } from "../types/content.ts";
 
 type Errors = Record<string, string>;
@@ -36,7 +37,11 @@ export function validateContent(input: ContentInput, options: { taken: (slug: st
   else if (options.reserved && RESERVED_SLUGS.includes(input.slug)) errors.slug = "This address is used by another part of the site.";
   else if (options.taken(input.slug)) errors.slug = "Another item already uses this address.";
   if (input.excerpt.length > 300) errors.excerpt = "Keep the excerpt under 300 characters.";
-  if (input.status === "published" && !htmlToText(sanitizeRichHtml(input.bodyHtml)).trim()) errors.bodyHtml = "Add some content before publishing.";
+  // A reusable block or an image counts as content: a page can be just a block.
+  if (input.status === "published") {
+    const clean = sanitizeRichHtml(input.bodyHtml);
+    if (!htmlToText(clean).trim() && !blockIdsIn(clean).length && !/<img\b/.test(clean)) errors.bodyHtml = "Add some content before publishing.";
+  }
   if (input.status === "scheduled") {
     const at = input.publishedAt ? Date.parse(input.publishedAt) : Number.NaN;
     if (Number.isNaN(at)) errors.publishedAt = "Choose when to publish.";

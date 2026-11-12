@@ -1,5 +1,6 @@
 import type { TaxRates } from "@/lib/orders/calc";
 import type { reportBreakdowns, ReportSummary } from "@/lib/reports/aggregate";
+import type { BulkOperation } from "@/lib/catalog/bulk";
 import type { DeliveryDate } from "@/lib/delivery/schedule";
 import type { Segments } from "@/lib/reminders/segment";
 import type { RuledQuote, ShippingGeneralSettings, ShippingRule, ShippingRuleInput } from "@/lib/shipping/rules";
@@ -157,7 +158,8 @@ import type {
   Tag,
   TaxClass,
   TaxClassOption,
-} from "@/lib/types";
+  ProductImportResult,
+  ProductImportRow, ContentAutosave, ContentBlock, ContentBlockInput, ContentBlockKind, ContentBlockSummary, ContentBlockUse, ContentKind, ContentRevision, ContentRevisionSummary, ContentSnapshot, BulkProductResult } from "@/lib/types";
 
 /**
  * Data-access contracts used by pages. The mock implementation lives in
@@ -224,6 +226,13 @@ export interface InventoryQuery extends PageQuery {
 }
 
 export interface ProductRepository {
+  /**
+   * Admin bulk change (src/lib/catalog/bulk.ts). `apply: false` only previews; `apply: true` changes the rows without a
+   * problem and skips the rest. At most BULK_LIMIT ids.
+   */
+  bulkChange(ids: ID[], operation: BulkOperation, apply: boolean): Promise<BulkProductResult>;
+  /** CSV import (src/lib/catalog/csv-import.ts). `apply: false` only checks. At most CSV_LIMITS.rows rows. */
+  importProducts(rows: ProductImportRow[], apply: boolean): Promise<ProductImportResult>;
   /** Public catalog: published + visible products only, never prices. Sortable by name or updated. */
   list(query?: ProductListQuery): Promise<Paginated<ProductSummary>>;
   getBySlug(slug: string): Promise<Product | null>;
@@ -861,6 +870,43 @@ export interface NavigationRepository {
   remove(id: ID, actor: Actor): Promise<void>;
 }
 
+export type ContentBlockSortField = "name" | "updated" | "usage";
+
+export interface ContentBlockListQuery extends ListQuery<ContentBlockSortField> {
+  kind?: ContentBlockKind;
+}
+
+/** Revisions and autosave for pages and posts (src/lib/content/revisions.ts). Saving a page or post records revisions itself. */
+export interface ContentHistoryRepository {
+  /** Newest first, without content. Empty until the item is first saved. */
+  revisions(kind: ContentKind, id: ID): Promise<ContentRevisionSummary[]>;
+  revision(kind: ContentKind, id: ID, revisionId: ID): Promise<ContentRevision | null>;
+  /**
+   * Puts a revision's content back, keeping the item's status and publish date (a live item changes straight away; the
+   * screen asks first). Recorded as a new revision. Refused for an item in the trash or when the address is now taken.
+   */
+  restoreRevision(kind: ContentKind, id: ID, revisionId: ID, actor: Actor): Promise<SaveResult<{ id: ID; updatedAt: string }>>;
+  /** Keeps unsaved editing work without touching the item. Saving the item discards it. */
+  autosave(kind: ContentKind, id: ID, snapshot: ContentSnapshot, actor: Actor): Promise<SaveResult<ContentAutosave>>;
+  /** Only when it is newer than the item's last save. */
+  getAutosave(kind: ContentKind, id: ID): Promise<ContentAutosave | null>;
+  discardAutosave(kind: ContentKind, id: ID, actor: Actor): Promise<void>;
+}
+
+/** Reusable content blocks (src/lib/content/blocks.ts). */
+export interface ContentBlockRepository {
+  list(query?: ContentBlockListQuery): Promise<Paginated<ContentBlockSummary>>;
+  getById(id: ID): Promise<ContentBlock | null>;
+  /** Pages and posts (not in the trash) that contain the block. */
+  usage(id: ID): Promise<ContentBlockUse[]>;
+  /** Creates when `id` is null. Sanitizes the content and removes any block markers from it. */
+  save(id: ID | null, input: ContentBlockInput, actor: Actor): Promise<SaveResult<ContentBlock>>;
+  /** Refused while a page or post uses it. */
+  remove(id: ID, actor: Actor): Promise<SaveResult<{ id: ID }>>;
+  /** For showing pages: the blocks with these ids that exist (at most 50). */
+  resolve(ids: ID[]): Promise<Pick<ContentBlock, "id" | "kind" | "bodyHtml">[]>;
+}
+
 export interface SiteContentRepository {
   /** Homepage sections and About page content. */
   get(): Promise<SiteContent>;
@@ -944,7 +990,11 @@ export interface QuotationRepository {
   sendQuote(id: ID, input: QuotationQuoteInput, actor: Actor): Promise<SaveResult<Quotation>>;
   decline(id: ID, reason: string, actor: Actor): Promise<SaveResult<Quotation>>;
   /** Accepting creates an order at the quoted prices. An expired quote can't be accepted. */
-  respond(customerId: ID, id: ID, answer: "accept" | "reject", actor: Actor): Promise<SaveResult<Quotation>>;
+  /**
+   * Accepting creates an order at the quoted prices, paid by `paymentMethod`: one of the methods available at checkout.
+   * With only one available it may be left out. With none available, accepting is refused. No payment is taken.
+   */
+  respond(customerId: ID, id: ID, answer: "accept" | "reject", actor: Actor, paymentMethod?: PaymentMethodId): Promise<SaveResult<Quotation>>;
 }
 
 export interface CouponRepository {
@@ -1034,6 +1084,8 @@ export interface Repositories {
   pages: PageRepository;
   navigation: NavigationRepository;
   siteContent: SiteContentRepository;
+  contentHistory: ContentHistoryRepository;
+  blocks: ContentBlockRepository;
   products: ProductRepository;
   categories: CategoryRepository;
   catalogSettings: CatalogSettingsRepository;

@@ -156,9 +156,10 @@ export async function requestQuotationAction(raw: unknown): Promise<PortalResult
   return fromSave(await repositories.quotations.request(id, { items: (Array.isArray(v.items) ? v.items : []).slice(0, 100).map(line), customerNote: str(v.customerNote, 1100) }));
 }
 
-export async function respondQuotationAction(quotationId: string, answer: "accept" | "reject"): Promise<PortalResult> {
+export async function respondQuotationAction(quotationId: string, answer: "accept" | "reject", paymentMethod?: string): Promise<PortalResult> {
   const { id, actor } = await me();
-  const r = await repositories.quotations.respond(id, str(quotationId, 100), answer === "accept" ? "accept" : "reject", actor);
+  const method = (["pay_on_delivery", "bank_transfer", "online"] as const).find((m) => m === paymentMethod);
+  const r = await repositories.quotations.respond(id, str(quotationId, 100), answer === "accept" ? "accept" : "reject", actor, method);
   if (r.ok) revalidatePath("/", "layout");
   return r.ok ? r : { ok: false, errors: r.errors, message: r.message ?? "That couldn't be saved." };
 }

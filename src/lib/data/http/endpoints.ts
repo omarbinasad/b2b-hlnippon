@@ -112,7 +112,7 @@ export const ENDPOINTS: EndpointMap = {
     request: { route: "POST /customer/quotations", perm: "customer", req: "QuotationRequestInput", res: "Quotation", ...SAVE, map: (_c, input) => ({ body: input }) },
     sendQuote: { route: "POST /admin/quotations/{id}/quote", perm: "quotations.edit", req: "QuotationQuoteInput", res: "Quotation", ...SAVE, map: (id, input) => ({ path: { id }, body: input }) },
     decline: { route: "POST /admin/quotations/{id}/decline", perm: "quotations.edit", res: "Quotation", ...SAVE, map: (id, reason) => ({ path: { id }, body: { reason } }) },
-    respond: { route: "POST /customer/quotations/{id}/respond", perm: "customer", res: "Quotation", ...SAVE, note: "Accepting creates an order at the quoted prices. An expired quote is refused.", map: (_c, id, answer) => ({ path: { id }, body: { answer } }) },
+    respond: { route: "POST /customer/quotations/{id}/respond", perm: "customer", res: "Quotation", ...SAVE, note: "Accepting creates an order at the quoted prices, unpaid, with the chosen payment method: one available at checkout (may be left out when only one is). No eligible method: 422. An expired quote is refused.", map: (_c, id, answer, _actor, paymentMethod) => ({ path: { id }, body: { answer, paymentMethod } }) },
   },
   adminNotifications: {
     feed: { route: "GET /admin/notifications", perm: "dashboard.view", res: "AdminNotificationFeed", map: (query) => ({ query }) },
@@ -138,6 +138,22 @@ export const ENDPOINTS: EndpointMap = {
     restore: { route: "POST /admin/posts/{id}/restore", perm: "posts.edit", ...VOID, map: (id) => ({ path: { id } }) },
     deleteForever: { route: "DELETE /admin/posts/{id}", perm: "posts.delete", ...VOID, note: "Only from the trash.", map: (id) => ({ path: { id } }) },
   },
+  contentHistory: {
+    revisions: { route: "GET /admin/{kind}s/{id}/revisions", perm: "pages.view or posts.view", res: "ContentRevisionSummary[]", note: "kind is page or post; pages.* for pages, posts.* for posts. Newest first, without content. Saving a page or post records a revision when its content changed (keep the newest 25); the first save of an item with no history also keeps the version it replaced.", map: (kind, id) => ({ path: { kind, id } }) },
+    revision: { route: "GET /admin/{kind}s/{id}/revisions/{revisionId}", perm: "pages.view or posts.view", res: "ContentRevision", ...NULL, map: (kind, id, revisionId) => ({ path: { kind, id, revisionId } }) },
+    restoreRevision: { route: "POST /admin/{kind}s/{id}/revisions/{revisionId}/restore", perm: "pages.edit or posts.edit", ...SAVE, note: "Puts the revision's content back and keeps the item's status and publish date, so a live item changes at once (the screen asks first). Validates like a save (the address may be taken now) and records a new revision. 409 for an item in the trash.", map: (kind, id, revisionId) => ({ path: { kind, id, revisionId } }) },
+    autosave: { route: "PUT /admin/{kind}s/{id}/autosave", perm: "pages.edit or posts.edit", req: "ContentSnapshot", res: "ContentAutosave", ...SAVE, note: "Unsaved editing work. Never changes the item. Keep one per user per item; sanitize the HTML. Saving the item discards it. New, never-saved items autosave in the browser only.", map: (kind, id, snapshot) => ({ path: { kind, id }, body: snapshot }) },
+    getAutosave: { route: "GET /admin/{kind}s/{id}/autosave", perm: "pages.edit or posts.edit", res: "ContentAutosave", ...NULL, note: "404 unless it is newer than the item's last save and differs from it.", map: (kind, id) => ({ path: { kind, id } }) },
+    discardAutosave: { route: "DELETE /admin/{kind}s/{id}/autosave", perm: "pages.edit or posts.edit", ...VOID, map: (kind, id) => ({ path: { kind, id } }) },
+  },
+  blocks: {
+    list: { route: "GET /admin/content-blocks", perm: "pages.view", res: "Paginated<ContentBlockSummary>", note: "usedBy counts pages and posts outside the trash whose HTML has the block's marker.", map: (query) => ({ query }) },
+    getById: { route: "GET /admin/content-blocks/{id}", perm: "pages.view", res: "ContentBlock", ...NULL, map: (id) => ({ path: { id } }) },
+    usage: { route: "GET /admin/content-blocks/{id}/usage", perm: "pages.view", res: "ContentBlockUse[]", map: (id) => ({ path: { id } }) },
+    save: { route: "PUT /admin/content-blocks/{id?}", perm: "pages.edit", req: "ContentBlockInput", res: "ContentBlock", ...SAVE, note: "POST when creating (pages.create). Names are unique (case-insensitive). Sanitize the HTML like page content and remove block markers from it: blocks can't contain blocks.", map: (id, input) => ({ path: { id: id ?? "" }, body: input }) },
+    remove: { route: "DELETE /admin/content-blocks/{id}", perm: "pages.delete", ...SAVE, note: "409 while any page or post outside the trash uses it; the message names them.", map: (id) => ({ path: { id } }) },
+    resolve: { route: "GET /content-blocks", perm: "public", note: "ids: comma-separated, at most 50. Returns id, kind and bodyHtml of those that exist, for expanding markers in a page. Better: expand the markers on the server when serving pages and posts (src/lib/content/blocks.ts expandBlocks).", map: (ids) => ({ query: { ids: ids.join(",") } }) },
+  },
   pages: {
     getLiveBySlug: { route: "GET /pages/{slug}", perm: "public", res: "ContentPage", ...NULL, note: "A customers-only page must return 404 to anyone else.", map: (slug) => ({ path: { slug } }) },
     listLive: { route: "GET /pages", perm: "public", res: "ContentPage[]" },
@@ -161,6 +177,8 @@ export const ENDPOINTS: EndpointMap = {
     update: { route: "PUT /admin/site-content", perm: "homepage.edit", req: "SiteContentInput", res: "SiteContent", ...SAVE, map: (input) => ({ body: input }) },
   },
   products: {
+    importProducts: { route: "POST /admin/products/import", perm: "products.create", res: "ProductImportResult", note: "Also needs products.edit (rows can update). Body: rows (raw text per column, at most 1000) and apply. apply false only checks. Same rules as src/lib/catalog/csv-import.ts: update by ID or SKU, only filled-in cells change, a product with any problem is skipped with its variation rows. Run large files as a background job and report per row. Schema: docs/PRODUCT-CSV.md.", map: (rows, apply) => ({ body: { rows, apply } }) },
+    bulkChange: { route: "POST /admin/products/bulk", perm: "products.edit", res: "BulkProductResult", note: "Body: ids (at most 200), operation, apply. apply false previews; true changes rows without a problem and skips the rest, in one transaction per product. Archiving and deleting need products.delete. Deleting is refused for products that orders, quotations or carts still reference. Same rules as src/lib/catalog/bulk.ts.", map: (ids, operation, apply) => ({ body: { ids, operation, apply } }) },
     list: { route: "GET /products", perm: "public", res: "Paginated<ProductSummary>", note: "Never includes customer prices.", map: (query) => ({ query }) },
     getBySlug: { route: "GET /products/{slug}", perm: "public", res: "Product", ...NULL, map: (slug) => ({ path: { slug } }) },
     listCategories: { route: "GET /categories", perm: "public", res: "Category[]" },

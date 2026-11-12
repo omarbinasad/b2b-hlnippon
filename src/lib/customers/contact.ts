@@ -68,4 +68,16 @@ export const postcodeKey = (v?: string) => (v ?? "").replace(/[^A-Za-z0-9]/g, ""
 /** "1000001" / "100-0001" → "100-0001" in Japan; other countries keep what was typed. */
 export const normalizePostcode = (v: string, country?: string) => rules(country).formatPostcode?.(v.replace(/\D/g, "")) ?? v.trim();
 
+/**
+ * How a postcode input behaves for the store country: its length limit, keyboard and which characters typing keeps.
+ * Every postcode field uses this, so a country with longer or lettered postcodes is never cut off.
+ */
+export function postcodeInput(country = storeCountry()): { maxLength: number; inputMode: "numeric" | "text"; clean: (v: string) => string } {
+  const digitsAndDash = (max: number) => ({ maxLength: max, inputMode: "numeric" as const, clean: (v: string) => v.replace(/[^\d-]/g, "").slice(0, max) });
+  if (country === "JP") return digitsAndDash(8); // 160-0023
+  if (country === "US") return digitsAndDash(10); // 94105-1234
+  if (country === "BD") return { maxLength: 4, inputMode: "numeric", clean: (v) => v.replace(/\D/g, "").slice(0, 4) };
+  return { maxLength: 10, inputMode: "text", clean: (v) => v.replace(/[^A-Za-z0-9 -]/g, "").slice(0, 10) };
+}
+
 export const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());

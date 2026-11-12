@@ -1,6 +1,7 @@
 "use client";
 
 import { addressLabels, regionNames } from "@/lib/locations";
+import { postcodeInput } from "@/lib/customers/contact";
 import { useState, useTransition } from "react";
 import { saveZoneAction } from "@/app/admin/shipping/actions";
 import { testDraftZoneAction } from "@/app/admin/shipping/extras-actions";
@@ -206,8 +207,8 @@ export function ZoneForm({ zone, others, classes, pickups = [], guided = false }
                     </div>
                   ) : (
                     <div>
-                      <label htmlFor={`loc-${l.key}-postcode`} className="block text-xs font-medium">Postcode (7 digits)</label>
-                      <Input id={`loc-${l.key}-postcode`} inputMode="numeric" maxLength={4} value={l.postalCode} onChange={(e) => updateLoc(l.key, { postalCode: e.target.value.replace(/\D/g, "") })} />
+                      <label htmlFor={`loc-${l.key}-postcode`} className="block text-xs font-medium">{addressLabels().postcode}</label>
+                      <Input id={`loc-${l.key}-postcode`} inputMode={postcodeInput().inputMode} maxLength={postcodeInput().maxLength} value={l.postalCode} onChange={(e) => updateLoc(l.key, { postalCode: postcodeInput().clean(e.target.value) })} />
                     </div>
                   )}
                   {l.type === "city" ? (

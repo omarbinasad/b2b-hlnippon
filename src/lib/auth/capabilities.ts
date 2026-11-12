@@ -113,6 +113,7 @@ const ROUTES: [string, string][] = [
   ["/admin/orders", "orders.view"],
   ["/admin/quotations", "quotations.view"],
   ["/admin/products/new", "products.create"],
+  ["/admin/products/import", "products.create"],
   ["/admin/products/*/edit", "products.edit"],
   ["/admin/products", "products.view"],
   ["/admin/categories/new", "products.edit"],
@@ -132,6 +133,8 @@ const ROUTES: [string, string][] = [
   ["/admin/coupons/new", "coupons.create"],
   ["/admin/coupons", "coupons.view"],
   ["/admin/pages/new", "pages.create"],
+  ["/admin/blocks/new", "pages.create"],
+  ["/admin/blocks", "pages.view"],
   ["/admin/pages", "pages.view"],
   ["/admin/posts/new", "posts.create"],
   ["/admin/posts", "posts.view"],
@@ -180,6 +183,7 @@ export const canOpen = (capabilities: Iterable<string>, path: string) => {
  */
 const WRITE_ROUTES: [string, string | null][] = [
   ["/admin/pages/*", "pages.edit"],
+  ["/admin/blocks/*", "pages.edit"],
   ["/admin/posts/*", "posts.edit"],
   ["/admin/coupons/*", "coupons.edit"],
   ["/admin/pricing/test", null],

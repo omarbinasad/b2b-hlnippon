@@ -16,6 +16,8 @@ export const HERO_SLIDE: HeroSlide = {
   secondaryCta: { label: "Open a trade account", href: "/register" },
   image: { src: "/brand/hero/hero-light.webp", alt: "Boxes of halal beef, chicken, mutton, seafood, rice, spices and oil on a pallet at a warehouse, with a delivery truck behind", width: 2089, height: 753 },
   imageDark: { src: "/brand/hero/hero-dark.webp", alt: "Boxes of halal beef, chicken, mutton, seafood, rice, spices and oil on a pallet inside a lit warehouse at night, with a delivery truck behind", width: 2089, height: 753 },
+  imageMobile: { src: "/brand/hero/hero-mobile-light.webp", alt: "Boxes of halal beef, chicken, mutton, seafood, rice, spices and oil on a pallet outside a warehouse, with a delivery truck behind", width: 1111, height: 1365 },
+  imageMobileDark: { src: "/brand/hero/hero-mobile-dark.webp", alt: "Boxes of halal beef, chicken, mutton, seafood, rice, spices and oil on a pallet inside a lit warehouse at night, with a delivery truck behind", width: 1111, height: 1415 },
   icons: [],
 };
 

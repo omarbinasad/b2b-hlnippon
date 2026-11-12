@@ -1,5 +1,20 @@
 # Frontend completion report
 
+**Final improvements and frontend freeze (2026-11-12).** Batch 11 of `FRONTEND-MASTER-CHECKLIST.md` is done; that file holds the verification results. Summary:
+
+| Area | What changed | Where |
+| --- | --- | --- |
+| Package quantities | Each product has its own minimum, maximum and "order in multiples of", counted in packages, never weight. Precedence: variation/product rule > product's own limits > category/store-wide rule > default. Enforced on the product page, cart, checkout, admin orders and the rule tester. Delivered-weight recalculation unchanged (fixed packages keep their price; priced-by-weight products recalculate) | `src/lib/pricing/engine.ts`, `validation/product.ts`, Inventory → Order quantity |
+| Publishing checks | Drafts may be incomplete; publishing needs name, type, SKU (unique), selling unit, category, package weight, price, valid stock and limits, and an active variation for variable products. Same checks in the editor, bulk publish and CSV import | `validation/product.ts` (`publishProblems`) |
+| Quotation payment | The customer picks from the enabled checkout methods (nothing forced or pre-selected); none enabled = clear message, no accept; the order is created unpaid at the quoted prices | `mock-portal.ts`, `components/account/quotation-forms.tsx` |
+| Money accuracy | One money summary on admin and customer order pages: original/current total, received, refunds recorded/processed, outstanding, overpaid, refund due, invoice total, credit notes. A credit note is never a refund | `src/lib/orders/money-summary.ts` |
+| Bulk product changes | Select products, choose a change, preview every row (change or skip reason), then apply | `src/lib/catalog/bulk.ts`, `components/admin/products/bulk-bar.tsx` |
+| Product CSV | WooCommerce-like import (map columns, check, import, per-row results; update by ID or SKU; variations by Parent SKU; duplicates reported) and export (filters or selection, columns, template) | `src/lib/catalog/csv*.ts`, `docs/PRODUCT-CSV.md` |
+| CMS | Revisions (history, compare, restore), autosave (status, recover, browser copy for new items, confirm before changing live content), reusable blocks (announcement, banner, call to action, contact, product promotion; inserted as markers and expanded when shown) | `src/lib/content/revisions.ts`, `blocks.ts`, `/admin/blocks`, `/admin/pages/[id]/revisions` |
+| Fixes found while testing | Storefront limits ignored the product's own limits; a store-wide rule overrode product limits; new drafts failed on empty weight/stock/selling unit; five postcode fields were capped at 4 digits (Japanese postcodes have 7); a page made only of a block couldn't publish; a variable product whose options track their own stock still needed a product-level quantity | see the checklist |
+
+Backend contracts for all of this are generated in `API-CONTRACTS.md`; rules are in `BUSINESS-RULES.md` §3, §9, §21, §23, §24; tables in `DATABASE-REQUIREMENTS.md`. The frontend is frozen apart from fixes; the next step is the backend (`BACKEND-INTEGRATION-GUIDE.md`).
+
 **Final status (2026-11-05).** All 10 batches of the brief are finished as a demo. Results, what's untested and open issues are in `FRONTEND-MASTER-CHECKLIST.md`. Nothing real is implemented: `BACKEND-PENDING-FEATURES.md` lists what the backend must add. Start backend work at `BACKEND-INTEGRATION-GUIDE.md`. Older sections below are history, and their values (such as `isJpPhone`) may no longer match the code.
 
 > **Plan and status now live in `FRONTEND-MASTER-CHECKLIST.md`** (10-batch plan, brief of 2026-11-04). The checklist and batch plan below are the earlier 13-batch version, kept for its decisions and batch notes.

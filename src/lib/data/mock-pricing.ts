@@ -7,7 +7,6 @@ import {
   findPriceConflicts,
   findQuantityConflicts,
   negativePriceErrors,
-  resolveQuantityLimits,
   TARGET_LEVEL,
   AUDIENCE_LEVEL,
   validatePriceRule,
@@ -17,7 +16,7 @@ import type { PriceRule, PriceRuleInput, Product, QuantityLimitRule, QuantityLim
 import { mockCategories, mockProducts } from "./mock/catalog";
 import { mockCustomerGroups, mockCustomers } from "./mock/customers";
 import { mockPriceRules, mockQuantityRules } from "./mock/price-rules";
-import { basePriceOf, quotePrice, ruleItem } from "./mock/pricing-rules";
+import { basePriceOf, quantityLimitsFor, quotePrice, ruleItem } from "./mock/pricing-rules";
 import { matches, paginate, sortBy, type SortKey } from "./mock-utils";
 import type { PriceRuleListItem, PricingRepository, QuantityRuleListItem, QuantityRuleRepository, RuleConflictItem, SaveResult } from "./repositories";
 
@@ -242,7 +241,7 @@ export const mockPricingRepository: PricingRepository = {
     if (!product) return null;
     if (product.type === "variable" && !product.variations.some((v) => v.id === variationId)) return null;
     const qty = Number.isInteger(quantity) && quantity >= 1 ? quantity : 1;
-    const limits = resolveQuantityLimits(mockQuantityRules, ruleItem(product, variationId));
+    const limits = quantityLimitsFor(product, variationId);
     const customer = customerId ? mockCustomers.find((c) => c.id === customerId) : undefined;
     const variation = product.variations.find((v) => v.id === variationId);
     return clone({
@@ -317,6 +316,6 @@ export const mockQuantityRuleRepository: QuantityRuleRepository = {
   },
   async effectiveFor(productId, variationId) {
     const product = mockProducts.find((p) => p.id === productId);
-    return product ? clone(resolveQuantityLimits(mockQuantityRules, ruleItem(product, variationId))) : null;
+    return product ? clone(quantityLimitsFor(product, variationId)) : null;
   },
 };

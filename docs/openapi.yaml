@@ -2956,7 +2956,7 @@
       "tags":
         - "Quotations"
       "summary": "quotations.respond"
-      "description": "Permission: customer. Accepting creates an order at the quoted prices. An expired quote can't be accepted. Accepting creates an order at the quoted prices. An expired quote is refused."
+      "description": "Permission: customer. Accepting creates an order at the quoted prices, paid by `paymentMethod`: one of the methods available at checkout. With only one available it may be left out. With none available, accepting is refused. No payment is taken. Accepting creates an order at the quoted prices, unpaid, with the chosen payment method: one available at checkout (may be left out when only one is). No eligible method: 422. An expired quote is refused."
       "parameters":
         - "name": "id"
           "in": "path"
@@ -2975,6 +2975,12 @@
                   "enum":
                     - "accept"
                     - "reject"
+                "paymentMethod":
+                  "type": "string"
+                  "enum":
+                    - "pay_on_delivery"
+                    - "bank_transfer"
+                    - "online"
               "required":
                 - "answer"
       "responses":
@@ -3807,6 +3813,667 @@
             "application/json":
               "schema":
                 "$ref": "#/components/schemas/ApiError"
+  "/admin/{kind}s/{id}/revisions":
+    "get":
+      "operationId": "contentHistory_revisions"
+      "tags":
+        - "contentHistory"
+      "summary": "contentHistory.revisions"
+      "description": "Permission: pages.view or posts.view. Newest first, without content. Empty until the item is first saved. kind is page or post; pages.* for pages, posts.* for posts. Newest first, without content. Saving a page or post records a revision when its content changed (keep the newest 25); the first save of an item with no history also keeps the version it replaced."
+      "parameters":
+        - "name": "kind"
+          "in": "path"
+          "required": true
+          "schema":
+            "$ref": "#/components/schemas/ContentKind"
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "OK"
+          "content":
+            "application/json":
+              "schema":
+                "type": "array"
+                "items":
+                  "$ref": "#/components/schemas/ContentRevisionSummary"
+        "401":
+          "description": "Not signed in"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "Missing permission"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "Not found"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/admin/{kind}s/{id}/revisions/{revisionId}":
+    "get":
+      "operationId": "contentHistory_revision"
+      "tags":
+        - "contentHistory"
+      "summary": "contentHistory.revision"
+      "description": "Permission: pages.view or posts.view."
+      "parameters":
+        - "name": "kind"
+          "in": "path"
+          "required": true
+          "schema":
+            "$ref": "#/components/schemas/ContentKind"
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+        - "name": "revisionId"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "OK"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ContentRevision"
+                "nullable": true
+        "401":
+          "description": "Not signed in"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "Missing permission"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "Not found"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/admin/{kind}s/{id}/revisions/{revisionId}/restore":
+    "post":
+      "operationId": "contentHistory_restoreRevision"
+      "tags":
+        - "contentHistory"
+      "summary": "contentHistory.restoreRevision"
+      "description": "Permission: pages.edit or posts.edit. Puts a revision's content back, keeping the item's status and publish date (a live item changes straight away; the screen asks first). Recorded as a new revision. Refused for an item in the trash or when the address is now taken. Puts the revision's content back and keeps the item's status and publish date, so a live item changes at once (the screen asks first). Validates like a save (the address may be taken now) and records a new revision. 409 for an item in the trash."
+      "parameters":
+        - "name": "kind"
+          "in": "path"
+          "required": true
+          "schema":
+            "$ref": "#/components/schemas/ContentKind"
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+        - "name": "revisionId"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "OK"
+          "content":
+            "application/json":
+              "schema":
+                "type": "object"
+                "properties":
+                  "id":
+                    "type": "string"
+                  "updatedAt":
+                    "type": "string"
+                "required":
+                  - "id"
+                  - "updatedAt"
+        "401":
+          "description": "Not signed in"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "Missing permission"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "Not found"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          "description": "Conflict"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "422":
+          "description": "Validation failed"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/admin/{kind}s/{id}/autosave":
+    "put":
+      "operationId": "contentHistory_autosave"
+      "tags":
+        - "contentHistory"
+      "summary": "contentHistory.autosave"
+      "description": "Permission: pages.edit or posts.edit. Keeps unsaved editing work without touching the item. Saving the item discards it. Unsaved editing work. Never changes the item. Keep one per user per item; sanitize the HTML. Saving the item discards it. New, never-saved items autosave in the browser only."
+      "parameters":
+        - "name": "kind"
+          "in": "path"
+          "required": true
+          "schema":
+            "$ref": "#/components/schemas/ContentKind"
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/ContentSnapshot"
+      "responses":
+        "200":
+          "description": "OK"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ContentAutosave"
+        "401":
+          "description": "Not signed in"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "Missing permission"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "Not found"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          "description": "Conflict"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "422":
+          "description": "Validation failed"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+    "get":
+      "operationId": "contentHistory_getAutosave"
+      "tags":
+        - "contentHistory"
+      "summary": "contentHistory.getAutosave"
+      "description": "Permission: pages.edit or posts.edit. Only when it is newer than the item's last save. 404 unless it is newer than the item's last save and differs from it."
+      "parameters":
+        - "name": "kind"
+          "in": "path"
+          "required": true
+          "schema":
+            "$ref": "#/components/schemas/ContentKind"
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "OK"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ContentAutosave"
+                "nullable": true
+        "401":
+          "description": "Not signed in"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "Missing permission"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "Not found"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+    "delete":
+      "operationId": "contentHistory_discardAutosave"
+      "tags":
+        - "contentHistory"
+      "summary": "contentHistory.discardAutosave"
+      "description": "Permission: pages.edit or posts.edit."
+      "parameters":
+        - "name": "kind"
+          "in": "path"
+          "required": true
+          "schema":
+            "$ref": "#/components/schemas/ContentKind"
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "204":
+          "description": "Done"
+        "401":
+          "description": "Not signed in"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "Missing permission"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "Not found"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/admin/content-blocks":
+    "get":
+      "operationId": "blocks_list"
+      "tags":
+        - "blocks"
+      "summary": "blocks.list"
+      "description": "Permission: pages.view. usedBy counts pages and posts outside the trash whose HTML has the block's marker."
+      "parameters":
+        - "name": "kind"
+          "in": "query"
+          "required": false
+          "schema":
+            "type": "string"
+            "enum":
+              - "contact"
+              - "announcement"
+              - "banner"
+              - "cta"
+              - "productPromo"
+        - "name": "search"
+          "in": "query"
+          "required": false
+          "schema":
+            "type": "string"
+        - "name": "sort"
+          "in": "query"
+          "required": false
+          "schema":
+            "type": "string"
+            "enum":
+              - "name"
+              - "updated"
+              - "usage"
+        - "name": "dir"
+          "in": "query"
+          "required": false
+          "schema":
+            "type": "string"
+            "enum":
+              - "asc"
+              - "desc"
+        - "name": "page"
+          "in": "query"
+          "required": false
+          "schema":
+            "type": "number"
+            "description": "1-based page number."
+        - "name": "perPage"
+          "in": "query"
+          "required": false
+          "schema":
+            "type": "number"
+      "responses":
+        "200":
+          "description": "OK"
+          "content":
+            "application/json":
+              "schema":
+                "type": "object"
+                "properties":
+                  "items":
+                    "type": "array"
+                    "items":
+                      "$ref": "#/components/schemas/ContentBlockSummary"
+                  "page":
+                    "type": "number"
+                  "perPage":
+                    "type": "number"
+                  "total":
+                    "type": "number"
+                  "totalPages":
+                    "type": "number"
+                "required":
+                  - "items"
+                  - "page"
+                  - "perPage"
+                  - "total"
+                  - "totalPages"
+        "401":
+          "description": "Not signed in"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "Missing permission"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+    "post":
+      "operationId": "blocks_save_create"
+      "tags":
+        - "blocks"
+      "summary": "blocks.save"
+      "description": "Permission: pages.edit. Creates when `id` is null. Sanitizes the content and removes any block markers from it. POST when creating (pages.create). Names are unique (case-insensitive). Sanitize the HTML like page content and remove block markers from it: blocks can't contain blocks."
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/ContentBlockInput"
+      "responses":
+        "200":
+          "description": "OK"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ContentBlock"
+        "401":
+          "description": "Not signed in"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "Missing permission"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          "description": "Conflict"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "422":
+          "description": "Validation failed"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/admin/content-blocks/{id}":
+    "get":
+      "operationId": "blocks_getById"
+      "tags":
+        - "blocks"
+      "summary": "blocks.getById"
+      "description": "Permission: pages.view."
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "OK"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ContentBlock"
+                "nullable": true
+        "401":
+          "description": "Not signed in"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "Missing permission"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "Not found"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+    "put":
+      "operationId": "blocks_save"
+      "tags":
+        - "blocks"
+      "summary": "blocks.save"
+      "description": "Permission: pages.edit. Creates when `id` is null. Sanitizes the content and removes any block markers from it. POST when creating (pages.create). Names are unique (case-insensitive). Sanitize the HTML like page content and remove block markers from it: blocks can't contain blocks."
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/ContentBlockInput"
+      "responses":
+        "200":
+          "description": "OK"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ContentBlock"
+        "401":
+          "description": "Not signed in"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "Missing permission"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "Not found"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          "description": "Conflict"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "422":
+          "description": "Validation failed"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+    "delete":
+      "operationId": "blocks_remove"
+      "tags":
+        - "blocks"
+      "summary": "blocks.remove"
+      "description": "Permission: pages.delete. Refused while a page or post uses it. 409 while any page or post outside the trash uses it; the message names them."
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "OK"
+          "content":
+            "application/json":
+              "schema":
+                "type": "object"
+                "properties":
+                  "id":
+                    "type": "string"
+                "required":
+                  - "id"
+        "401":
+          "description": "Not signed in"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "Missing permission"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "Not found"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          "description": "Conflict"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "422":
+          "description": "Validation failed"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/admin/content-blocks/{id}/usage":
+    "get":
+      "operationId": "blocks_usage"
+      "tags":
+        - "blocks"
+      "summary": "blocks.usage"
+      "description": "Permission: pages.view. Pages and posts (not in the trash) that contain the block."
+      "parameters":
+        - "name": "id"
+          "in": "path"
+          "required": true
+          "schema":
+            "type": "string"
+      "responses":
+        "200":
+          "description": "OK"
+          "content":
+            "application/json":
+              "schema":
+                "type": "array"
+                "items":
+                  "$ref": "#/components/schemas/ContentBlockUse"
+        "401":
+          "description": "Not signed in"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "Missing permission"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "Not found"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/content-blocks":
+    "get":
+      "operationId": "blocks_resolve"
+      "tags":
+        - "blocks"
+      "summary": "blocks.resolve"
+      "description": "Permission: public. For showing pages: the blocks with these ids that exist (at most 50). ids: comma-separated, at most 50. Returns id, kind and bodyHtml of those that exist, for expanding markers in a page. Better: expand the markers on the server when serving pages and posts (src/lib/content/blocks.ts expandBlocks)."
+      "parameters":
+        - "name": "ids"
+          "in": "query"
+          "required": true
+          "schema":
+            "type": "array"
+            "items":
+              "type": "string"
+      "responses":
+        "200":
+          "description": "OK"
+          "content":
+            "application/json":
+              "schema":
+                "type": "array"
+                "items":
+                  "type": "object"
+                  "properties":
+                    "bodyHtml":
+                      "type": "string"
+                      "description": "Sanitized like page content. Can't contain other blocks."
+                    "id":
+                      "type": "string"
+                    "kind":
+                      "$ref": "#/components/schemas/ContentBlockKind"
+                  "required":
+                    - "bodyHtml"
+                    - "id"
+                    - "kind"
   "/pages/{slug}":
     "get":
       "operationId": "pages_getLiveBySlug"
@@ -4505,6 +5172,105 @@
             "application/json":
               "schema":
                 "$ref": "#/components/schemas/ApiError"
+  "/admin/products/import":
+    "post":
+      "operationId": "products_importProducts"
+      "tags":
+        - "Products and inventory"
+      "summary": "products.importProducts"
+      "description": "Permission: products.create. CSV import (src/lib/catalog/csv-import.ts). `apply: false` only checks. At most CSV_LIMITS.rows rows. Also needs products.edit (rows can update). Body: rows (raw text per column, at most 1000) and apply. apply false only checks. Same rules as src/lib/catalog/csv-import.ts: update by ID or SKU, only filled-in cells change, a product with any problem is skipped with its variation rows. Run large files as a background job and report per row. Schema: docs/PRODUCT-CSV.md."
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "type": "object"
+              "properties":
+                "rows":
+                  "type": "array"
+                  "items":
+                    "$ref": "#/components/schemas/ProductImportRow"
+                "apply":
+                  "type": "boolean"
+              "required":
+                - "rows"
+                - "apply"
+      "responses":
+        "200":
+          "description": "OK"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ProductImportResult"
+        "401":
+          "description": "Not signed in"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "Missing permission"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "422":
+          "description": "Validation failed"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/admin/products/bulk":
+    "post":
+      "operationId": "products_bulkChange"
+      "tags":
+        - "Products and inventory"
+      "summary": "products.bulkChange"
+      "description": "Permission: products.edit. Admin bulk change (src/lib/catalog/bulk.ts). `apply: false` only previews; `apply: true` changes the rows without a problem and skips the rest. At most BULK_LIMIT ids. Body: ids (at most 200), operation, apply. apply false previews; true changes rows without a problem and skips the rest, in one transaction per product. Archiving and deleting need products.delete. Deleting is refused for products that orders, quotations or carts still reference. Same rules as src/lib/catalog/bulk.ts."
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "type": "object"
+              "properties":
+                "ids":
+                  "type": "array"
+                  "items":
+                    "type": "string"
+                "operation":
+                  "$ref": "#/components/schemas/BulkOperation"
+                "apply":
+                  "type": "boolean"
+              "required":
+                - "ids"
+                - "operation"
+                - "apply"
+      "responses":
+        "200":
+          "description": "OK"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BulkProductResult"
+        "401":
+          "description": "Not signed in"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "Missing permission"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "422":
+          "description": "Validation failed"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
   "/products":
     "get":
       "operationId": "products_list"
@@ -4733,8 +5499,8 @@
           "schema":
             "type": "string"
             "enum":
-              - "missing"
               - "set"
+              - "missing"
             "description": "\"missing\": not purchasable for lack of a store-currency price (simple product without a price, or an enabled variation without one) — e.g. imported products whose source price is in another currency. \"set\": fully priced."
         - "name": "categorySlug"
           "in": "query"
@@ -13562,6 +14328,160 @@
         - "logo"
         - "showOnHome"
         - "displayOrder"
+    "BulkChange":
+      "type": "object"
+      "properties":
+        "label":
+          "type": "string"
+          "description": "Readable field, e.g. \"Price\" or \"Price · 5 kg\"."
+        "before":
+          "oneOf":
+            - "type": "string"
+            - "type": "number"
+          "nullable": true
+        "after":
+          "oneOf":
+            - "type": "string"
+            - "type": "number"
+          "nullable": true
+        "money":
+          "type": "boolean"
+          "description": "The values are amounts of money (the screen formats them)."
+      "required":
+        - "label"
+        - "before"
+        - "after"
+    "BulkOperation":
+      "oneOf":
+        - "type": "object"
+          "properties":
+            "kind":
+              "type": "string"
+              "enum":
+                - "status"
+            "status":
+              "$ref": "#/components/schemas/ProductStatus"
+          "required":
+            - "kind"
+            - "status"
+        - "type": "object"
+          "properties":
+            "kind":
+              "type": "string"
+              "enum":
+                - "stock"
+            "status":
+              "type": "string"
+              "enum":
+                - "in_stock"
+                - "out_of_stock"
+          "required":
+            - "kind"
+            - "status"
+        - "type": "object"
+          "properties":
+            "kind":
+              "type": "string"
+              "enum":
+                - "categories"
+            "mode":
+              "type": "string"
+              "enum":
+                - "add"
+                - "replace"
+                - "remove"
+            "categoryIds":
+              "type": "array"
+              "items":
+                "type": "string"
+          "required":
+            - "kind"
+            - "mode"
+            - "categoryIds"
+        - "type": "object"
+          "properties":
+            "kind":
+              "type": "string"
+              "enum":
+                - "regularPrice"
+            "mode":
+              "$ref": "#/components/schemas/PriceMode"
+            "value":
+              "type": "number"
+          "required":
+            - "kind"
+            - "mode"
+            - "value"
+        - "type": "object"
+          "properties":
+            "kind":
+              "type": "string"
+              "enum":
+                - "salePrice"
+            "mode":
+              "$ref": "#/components/schemas/SaleMode"
+            "value":
+              "type": "number"
+          "required":
+            - "kind"
+            - "mode"
+        - "type": "object"
+          "properties":
+            "kind":
+              "type": "string"
+              "enum":
+                - "quantities"
+            "min":
+              "type": "number"
+            "max":
+              "type": "number"
+              "nullable": true
+            "step":
+              "type": "number"
+          "required":
+            - "kind"
+        - "type": "object"
+          "properties":
+            "kind":
+              "type": "string"
+              "enum":
+                - "delete"
+          "required":
+            - "kind"
+    "BulkProductResult":
+      "description": "POST /admin/products/bulk response: one row per product, and how many were changed."
+      "type": "object"
+      "properties":
+        "rows":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/BulkRow"
+        "applied":
+          "type": "number"
+      "required":
+        - "rows"
+        - "applied"
+    "BulkRow":
+      "type": "object"
+      "properties":
+        "productId":
+          "type": "string"
+        "name":
+          "type": "string"
+        "sku":
+          "type": "string"
+        "changes":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/BulkChange"
+        "problem":
+          "type": "string"
+          "description": "Why this product is skipped."
+      "required":
+        - "productId"
+        - "name"
+        - "sku"
+        - "changes"
     "ButtonStyle":
       "type": "string"
       "enum":
@@ -14273,6 +15193,127 @@
         - "account"
         - "orders"
         - "other"
+    "ContentAutosave":
+      "description": "Unsaved editing work kept by the server while someone edits. It never changes the page or post itself: the editor offers it back when it is newer than the saved version. The demo keeps one per item; the backend keeps one per user per item."
+      "type": "object"
+      "properties":
+        "kind":
+          "$ref": "#/components/schemas/ContentKind"
+        "itemId":
+          "type": "string"
+        "savedAt":
+          "type": "string"
+        "authorName":
+          "type": "string"
+        "snapshot":
+          "$ref": "#/components/schemas/ContentSnapshot"
+      "required":
+        - "kind"
+        - "itemId"
+        - "savedAt"
+        - "authorName"
+        - "snapshot"
+    "ContentBlock":
+      "description": "Reusable content written once and inserted into many pages or posts. Editing it changes every page that uses it."
+      "type": "object"
+      "properties":
+        "id":
+          "type": "string"
+        "name":
+          "type": "string"
+        "kind":
+          "$ref": "#/components/schemas/ContentBlockKind"
+        "bodyHtml":
+          "type": "string"
+          "description": "Sanitized like page content. Can't contain other blocks."
+        "authorName":
+          "type": "string"
+        "createdAt":
+          "type": "string"
+        "updatedAt":
+          "type": "string"
+      "required":
+        - "id"
+        - "name"
+        - "kind"
+        - "bodyHtml"
+        - "authorName"
+        - "createdAt"
+        - "updatedAt"
+    "ContentBlockInput":
+      "type": "object"
+      "properties":
+        "name":
+          "type": "string"
+        "bodyHtml":
+          "type": "string"
+          "description": "Sanitized like page content. Can't contain other blocks."
+        "kind":
+          "$ref": "#/components/schemas/ContentBlockKind"
+      "required":
+        - "name"
+        - "bodyHtml"
+        - "kind"
+    "ContentBlockKind":
+      "type": "string"
+      "enum":
+        - "contact"
+        - "announcement"
+        - "banner"
+        - "cta"
+        - "productPromo"
+    "ContentBlockSummary":
+      "description": "A block in the admin list, with how many pages and posts (not in the trash) use it."
+      "type": "object"
+      "properties":
+        "id":
+          "type": "string"
+        "name":
+          "type": "string"
+        "kind":
+          "$ref": "#/components/schemas/ContentBlockKind"
+        "bodyHtml":
+          "type": "string"
+          "description": "Sanitized like page content. Can't contain other blocks."
+        "authorName":
+          "type": "string"
+        "createdAt":
+          "type": "string"
+        "updatedAt":
+          "type": "string"
+        "usedBy":
+          "type": "number"
+      "required":
+        - "id"
+        - "name"
+        - "kind"
+        - "bodyHtml"
+        - "authorName"
+        - "createdAt"
+        - "updatedAt"
+        - "usedBy"
+    "ContentBlockUse":
+      "description": "A page or post that contains a block."
+      "type": "object"
+      "properties":
+        "kind":
+          "$ref": "#/components/schemas/ContentKind"
+        "id":
+          "type": "string"
+        "title":
+          "type": "string"
+        "status":
+          "$ref": "#/components/schemas/ContentStatus"
+      "required":
+        - "kind"
+        - "id"
+        - "title"
+        - "status"
+    "ContentKind":
+      "type": "string"
+      "enum":
+        - "page"
+        - "post"
     "ContentPage":
       "type": "object"
       "properties":
@@ -14358,6 +15399,108 @@
         - "status"
         - "seo"
         - "visibility"
+    "ContentRevision":
+      "description": "One saved version of a page or post. Kept on every save that changes the content (the newest 25 per item)."
+      "type": "object"
+      "properties":
+        "id":
+          "type": "string"
+        "kind":
+          "$ref": "#/components/schemas/ContentKind"
+        "itemId":
+          "type": "string"
+        "createdAt":
+          "type": "string"
+        "authorName":
+          "type": "string"
+        "status":
+          "$ref": "#/components/schemas/ContentStatus"
+          "description": "The item's status right after this version was saved."
+        "note":
+          "type": "string"
+          "description": "\"Saved\", \"Original version\" or \"Restored from …\"."
+        "snapshot":
+          "$ref": "#/components/schemas/ContentSnapshot"
+      "required":
+        - "id"
+        - "kind"
+        - "itemId"
+        - "createdAt"
+        - "authorName"
+        - "status"
+        - "note"
+        - "snapshot"
+    "ContentRevisionSummary":
+      "description": "A revision in the history list, without its content."
+      "type": "object"
+      "properties":
+        "id":
+          "type": "string"
+        "createdAt":
+          "type": "string"
+        "authorName":
+          "type": "string"
+        "status":
+          "$ref": "#/components/schemas/ContentStatus"
+          "description": "The item's status right after this version was saved."
+        "kind":
+          "$ref": "#/components/schemas/ContentKind"
+        "itemId":
+          "type": "string"
+        "note":
+          "type": "string"
+          "description": "\"Saved\", \"Original version\" or \"Restored from …\"."
+        "title":
+          "type": "string"
+        "words":
+          "type": "number"
+      "required":
+        - "id"
+        - "createdAt"
+        - "authorName"
+        - "status"
+        - "kind"
+        - "itemId"
+        - "note"
+        - "title"
+        - "words"
+    "ContentSnapshot":
+      "description": "The editable fields of a page or post, as kept in a revision or an autosave. Status and dates aren't part of it."
+      "type": "object"
+      "properties":
+        "title":
+          "type": "string"
+        "slug":
+          "type": "string"
+        "excerpt":
+          "type": "string"
+        "bodyHtml":
+          "type": "string"
+        "image":
+          "$ref": "#/components/schemas/ProductImage"
+        "seo":
+          "$ref": "#/components/schemas/SeoFields"
+        "visibility":
+          "type": "string"
+          "enum":
+            - "public"
+            - "customers"
+          "description": "Pages only."
+        "categories":
+          "type": "array"
+          "items":
+            "type": "string"
+          "description": "Posts only."
+        "tags":
+          "type": "array"
+          "items":
+            "type": "string"
+      "required":
+        - "title"
+        - "slug"
+        - "excerpt"
+        - "bodyHtml"
+        - "seo"
     "ContentStatus":
       "type": "string"
       "enum":
@@ -15416,6 +16559,14 @@
           "$ref": "#/components/schemas/SiteImage"
           "nullable": true
           "description": "The photo for the dark theme. Without one, the light photo is used in both."
+        "imageMobile":
+          "$ref": "#/components/schemas/SiteImage"
+          "nullable": true
+          "description": "Optional photos for phones (under 640px wide), usually portrait. Without them phones show the banner photos, cropped."
+        "imageMobileDark":
+          "$ref": "#/components/schemas/SiteImage"
+          "nullable": true
+          "description": "Phone photo for the dark theme. Without one, the phone light-theme photo is used (or the dark banner if there is no phone photo)."
         "icons":
           "type": "array"
           "items":
@@ -16449,11 +17600,11 @@
       "description": "What an admin changed on an order (audit history)."
       "type": "string"
       "enum":
+        - "add"
+        - "replace"
+        - "remove"
         - "shipping"
         - "adjust"
-        - "add"
-        - "remove"
-        - "replace"
         - "discount"
         - "delivery_date"
         - "address"
@@ -17155,14 +18306,14 @@
       "type": "string"
       "enum":
         - "invoice"
-        - "cash_on_delivery"
         - "bank_transfer"
+        - "cash_on_delivery"
         - "mobile_wallet"
     "PaymentMethodId":
       "type": "string"
       "enum":
-        - "bank_transfer"
         - "pay_on_delivery"
+        - "bank_transfer"
         - "online"
     "PaymentMethodInput":
       "description": "Editable fields. Connection state is never editable from the browser."
@@ -17214,8 +18365,8 @@
           "type": "string"
           "enum":
             - "invoice"
-            - "cash_on_delivery"
             - "bank_transfer"
+            - "cash_on_delivery"
             - "mobile_wallet"
           "description": "Order payment method recorded when a customer uses this option (no payment status change)."
         "legacyWooGatewayId":
@@ -17261,8 +18412,8 @@
           "type": "string"
           "enum":
             - "invoice"
-            - "cash_on_delivery"
             - "bank_transfer"
+            - "cash_on_delivery"
             - "mobile_wallet"
           "description": "Order payment method recorded when a customer uses this option (no payment status change)."
         "legacyWooGatewayId":
@@ -17428,6 +18579,15 @@
         - "rule"
         - "outcome"
         - "reason"
+    "PriceMode":
+      "description": "How a regular price changes: set it, or raise / lower it by a percentage or an amount."
+      "type": "string"
+      "enum":
+        - "set"
+        - "increase_percent"
+        - "decrease_percent"
+        - "increase_fixed"
+        - "decrease_fixed"
     "PriceResolution":
       "type": "object"
       "properties":
@@ -17845,9 +19005,127 @@
         - "alt"
         - "width"
         - "height"
+    "ProductImportResult":
+      "type": "object"
+      "properties":
+        "rows":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/ProductImportRowResult"
+        "created":
+          "type": "number"
+        "updated":
+          "type": "number"
+        "skipped":
+          "type": "number"
+      "required":
+        - "rows"
+        - "created"
+        - "updated"
+        - "skipped"
+    "ProductImportRow":
+      "description": "One file row after column matching: raw text per field. The server parses and checks every value."
+      "type": "object"
+      "properties":
+        "line":
+          "type": "number"
+          "description": "Line in the file (the header is line 1)."
+        "values":
+          "type": "object"
+          "properties":
+            "description":
+              "type": "string"
+            "name":
+              "type": "string"
+            "id":
+              "type": "string"
+            "type":
+              "type": "string"
+            "status":
+              "type": "string"
+            "categories":
+              "type": "string"
+            "sku":
+              "type": "string"
+            "parentSku":
+              "type": "string"
+            "regularPrice":
+              "type": "string"
+            "salePrice":
+              "type": "string"
+            "manageStock":
+              "type": "string"
+            "stock":
+              "type": "string"
+            "stockStatus":
+              "type": "string"
+            "weight":
+              "type": "string"
+            "weightUnit":
+              "type": "string"
+            "unitLabel":
+              "type": "string"
+            "minQuantity":
+              "type": "string"
+            "maxQuantity":
+              "type": "string"
+            "quantityStep":
+              "type": "string"
+            "pricedByWeight":
+              "type": "string"
+            "taxClass":
+              "type": "string"
+            "shortDescription":
+              "type": "string"
+            "attributeName":
+              "type": "string"
+            "attributeValues":
+              "type": "string"
+      "required":
+        - "line"
+        - "values"
+    "ProductImportRowResult":
+      "type": "object"
+      "properties":
+        "line":
+          "type": "number"
+        "sku":
+          "type": "string"
+        "name":
+          "type": "string"
+        "action":
+          "type": "string"
+          "enum":
+            - "create"
+            - "update"
+            - "skip"
+        "errors":
+          "type": "array"
+          "items":
+            "type": "string"
+          "description": "Why the row is skipped."
+        "warnings":
+          "type": "array"
+          "items":
+            "type": "string"
+          "description": "Imported, but worth knowing."
+      "required":
+        - "line"
+        - "sku"
+        - "name"
+        - "action"
+        - "errors"
+        - "warnings"
     "ProductInput":
       "type": "object"
       "properties":
+        "minQuantity":
+          "type": "number"
+          "description": "Order limits in packages (see QuantityRule). `quantityStep` 1 = no increment."
+        "maxQuantity":
+          "type": "number"
+        "quantityStep":
+          "type": "number"
         "type":
           "$ref": "#/components/schemas/ProductType"
         "name":
@@ -17952,6 +19230,8 @@
         "reviewsEnabled":
           "type": "boolean"
       "required":
+        - "minQuantity"
+        - "quantityStep"
         - "type"
         - "name"
         - "slug"
@@ -18021,19 +19301,19 @@
           "type": "string"
         "sku":
           "type": "string"
-        "shortDescription":
-          "type": "string"
-        "unitLabel":
-          "type": "string"
-          "description": "Selling unit shown to customers, e.g. \"case\", \"bag\", \"pack\"."
-        "basePrice":
-          "type": "number"
-          "description": "Simple products: admin responses only."
         "stock":
           "$ref": "#/components/schemas/StockInfo"
           "description": "Current stock; `status` is derived by the backend when the quantity is tracked."
         "weight":
           "$ref": "#/components/schemas/Weight"
+        "unitLabel":
+          "type": "string"
+          "description": "Selling unit shown to customers, e.g. \"case\", \"bag\", \"pack\"."
+        "shortDescription":
+          "type": "string"
+        "basePrice":
+          "type": "number"
+          "description": "Simple products: admin responses only."
         "isVariableWeight":
           "type": "boolean"
           "description": "Priced per kg and adjusted after packing (e.g. fresh meat). Final amount can change."
@@ -18050,10 +19330,10 @@
         - "id"
         - "slug"
         - "sku"
-        - "shortDescription"
-        - "unitLabel"
         - "stock"
         - "weight"
+        - "unitLabel"
+        - "shortDescription"
         - "isVariableWeight"
         - "categoryIds"
         - "hasVariations"
@@ -18201,6 +19481,9 @@
           "type": "number"
         "max":
           "type": "number"
+        "step":
+          "type": "number"
+          "description": "Order in multiples of this (the product's own setting; rules don't change it)."
         "rule":
           "$ref": "#/components/schemas/QuantityLimitRule"
         "candidates":
@@ -18225,15 +19508,18 @@
         - "candidates"
         - "explanation"
     "QuantityRule":
-      "description": "Per-product ordering settings. `step` (pack multiple) is still a product setting. `min`/`max` are LEGACY: per-line limits now come from quantity rules (QuantityLimitRule, resolved by src/lib/pricing/engine.ts); the seeded values were migrated there."
+      "description": "The product's own order limits, counted in PACKAGES (bags, cases, cartons), never in weight. Precedence (resolveQuantityLimits in src/lib/pricing/engine.ts): a quantity rule for the option or the product overrides them; these beat a category or store-wide rule (a minimum of 1 counts as \"not set\"); whatever is still empty comes from the rule, then the default (at least 1, no maximum). The step always comes from here."
       "type": "object"
       "properties":
         "min":
           "type": "number"
+          "description": "Minimum packages per order line. At least 1."
         "max":
           "type": "number"
+          "description": "Maximum packages per order line. Empty = no limit."
         "step":
           "type": "number"
+          "description": "Order in multiples of this many packages. 1 = any whole number (the normal case)."
       "required":
         - "min"
         - "step"
@@ -18296,18 +19582,18 @@
           "type": "string"
         "sku":
           "type": "string"
+        "stockStatus":
+          "$ref": "#/components/schemas/StockStatus"
         "unitLabel":
           "type": "string"
         "minQuantity":
           "type": "number"
         "maxQuantity":
           "type": "number"
-        "variationLabel":
-          "type": "string"
         "pricedByWeight":
           "type": "boolean"
-        "stockStatus":
-          "$ref": "#/components/schemas/StockStatus"
+        "variationLabel":
+          "type": "string"
         "unitPrice":
           "type": "number"
         "priceNote":
@@ -18324,10 +19610,10 @@
         - "productId"
         - "slug"
         - "sku"
+        - "stockStatus"
         - "unitLabel"
         - "minQuantity"
         - "pricedByWeight"
-        - "stockStatus"
         - "step"
     "QuickOrderPage":
       "description": "A page of the quick order sheet. Pages count products; a variable product contributes one line per option."
@@ -19387,6 +20673,12 @@
       "required":
         - "product"
         - "limits"
+    "SaleMode":
+      "type": "string"
+      "enum":
+        - "set"
+        - "percent_off"
+        - "clear"
     "SavedList":
       "type": "object"
       "properties":

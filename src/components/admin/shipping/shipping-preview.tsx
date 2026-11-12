@@ -1,6 +1,7 @@
 "use client";
 
 import { addressLabels, regionNames } from "@/lib/locations";
+import { postcodeInput } from "@/lib/customers/contact";
 import { useState, useTransition } from "react";
 import { getOrderCustomerAction } from "@/app/admin/orders/actions";
 import { productOptionAction } from "@/app/admin/pricing/actions";
@@ -128,7 +129,7 @@ export function ShippingPreview({ classes, examples, groups }: { classes: Shippi
                 <Input id="pv-city" value={address.city} onChange={(e) => setAddress({ ...address, city: e.target.value })} placeholder="e.g. Gazipur" />
               </Field>
               <Field id="pv-postcode" label={addressLabels().postcode}>
-                <Input id="pv-postcode" inputMode="numeric" maxLength={4} value={address.postalCode} onChange={(e) => setAddress({ ...address, postalCode: e.target.value.replace(/\D/g, "") })} />
+                <Input id="pv-postcode" inputMode={postcodeInput().inputMode} maxLength={postcodeInput().maxLength} value={address.postalCode} onChange={(e) => setAddress({ ...address, postalCode: postcodeInput().clean(e.target.value) })} />
               </Field>
             </div>
           </div>

@@ -14,13 +14,14 @@ export const metadata: Metadata = { title: "Quotation" };
 export default async function QuotationPage({ params }: PageProps<"/account/quotations/[id]">) {
   const q = await repositories.quotations.getById((await params).id, await getPortalCustomerId());
   if (!q) notFound();
+  const methods = q.status === "quoted" ? await repositories.payments.checkoutMethods() : [];
   return (
     <>
       <Link href="/account/quotations" className="text-sm text-muted hover:text-foreground">← All quotations</Link>
       <PageHeader title={q.number} actions={<QuotationStatusBadge status={q.status} />} />
       <div className="space-y-6">
         {q.status === "requested" && <Notice>We have your request and will reply with a quote.</Notice>}
-        {q.status === "quoted" && <QuotationResponse id={q.id} />}
+        {q.status === "quoted" && <QuotationResponse id={q.id} methods={methods.map((m) => ({ id: m.id, title: m.title, description: m.description }))} />}
         {q.orderId && <Notice tone="success" title={`Order ${q.orderNumber} created`}><Link href={`/account/orders/${q.orderId}`} className="font-medium underline">View the order</Link></Notice>}
         <QuotationDetails quotation={q} />
       </div>

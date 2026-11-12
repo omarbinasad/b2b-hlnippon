@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MoneySummary } from "@/components/order/money-summary";
 import { notFound } from "next/navigation";
 import { SaveOrderAsList } from "@/components/account/saved-list-editor";
 import { ReorderButton } from "@/components/order/reorder-button";
@@ -80,6 +81,7 @@ export default async function AccountOrderPage({ params, searchParams }: PagePro
 
         <Card title="Summary">
           <OrderTotalsList order={order} />
+          <div className="mt-3"><MoneySummary order={order} /></div>
           <p className="mt-3 text-sm text-muted">
             Payment: {paymentMethodLabels[order.payment.method]}
             {order.payment.reference && ` · ref ${order.payment.reference}`}

@@ -1117,3 +1117,16 @@ The backend replaces this with a database.
 ## Company settings, media and website content
 
 Added in the white-label and CMS batches. Company settings: `GET|PUT /api/v1/company` → `CompanySettings` (`src/lib/types/company.ts`); rules in `src/lib/validation/company.ts`; see `docs/WHITE-LABEL-ARCHITECTURE.md`. `settings.getStore()` is now a read-only view of those settings; `updateStore` was removed. Pages, posts, media, menus and homepage content: see `docs/CMS-AND-CONTENT-MANAGEMENT.md`.
+
+
+## Final frontend batch (2026-11-12)
+
+`docs/API-CONTRACTS.md` (generated) is authoritative; this is a summary of what the last batch added.
+
+- **Products:** `ProductInput` gains `minQuantity`, `maxQuantity` (optional) and `quantityStep`, saved as `Product.quantityRule` {min, max?, step}: order limits in packages. Drafts may leave SKU, price, weight, selling unit and stock empty; publishing may not (`validateProduct`, `publishProblems`).
+- `POST /admin/products/bulk`: { ids, operation, apply } → `BulkProductResult` (rows with changes or skip reasons). Preview with `apply: false`.
+- `POST /admin/products/import`: { rows, apply } → `ProductImportResult`. `GET /admin/products/export` with filters or `ids`, `cols`, `template=1`. Schema: `docs/PRODUCT-CSV.md`.
+- **Quotations:** `POST /customer/quotations/{id}/respond` body { answer, paymentMethod }. The method must be one checkout offers now; the order starts unpaid.
+- **Content history:** `GET /admin/{kind}s/{id}/revisions`, `GET …/revisions/{revisionId}`, `POST …/revisions/{revisionId}/restore`, `GET|PUT|DELETE /admin/{kind}s/{id}/autosave` (`kind` = page or post).
+- **Reusable blocks:** `GET|POST /admin/content-blocks`, `GET|PUT|DELETE /admin/content-blocks/{id}`, `GET /admin/content-blocks/{id}/usage`, public `GET /content-blocks?ids=`.
+- Rules: `docs/BUSINESS-RULES.md` §3, §9 (money summary), §21, §23, §24. Data model: `docs/DATABASE-REQUIREMENTS.md` §5.3, §5.7, §5.12.

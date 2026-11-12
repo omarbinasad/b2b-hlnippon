@@ -139,6 +139,8 @@ function SectionFields({ s, set, errors }: { s: HomeSection; set: (v: HomeSectio
                 />
                 <ImagePick label="Banner photo (light theme)" hint="With a photo, the slide shows it full width with the text on a frosted card." value={sl.image} onChange={(image) => setSl({ ...sl, image })} />
                 <ImagePick label="Banner photo (dark theme)" hint="Optional. Without it, the light-theme photo is used in both." value={sl.imageDark ?? null} onChange={(imageDark) => setSl({ ...sl, imageDark })} />
+                <ImagePick label="Phone photo (light theme)" hint="Optional, for screens under 640px wide; a portrait photo with space at the bottom for the card works best. Without it, phones show the banner photo cropped." value={sl.imageMobile ?? null} onChange={(imageMobile) => setSl({ ...sl, imageMobile })} />
+                <ImagePick label="Phone photo (dark theme)" hint="Optional. Without it, the phone light-theme photo is used (or the dark banner photo if there is no phone photo)." value={sl.imageMobileDark ?? null} onChange={(imageMobileDark) => setSl({ ...sl, imageMobileDark })} />
               </div>
             )}
           />

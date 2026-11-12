@@ -58,5 +58,6 @@ export function quotePrice(product: Product, customer: Pick<Customer, "id" | "gr
   return resolvePrice({ rules: mockPriceRules, customer, item: ruleItem(product, variationId), basePrice, salePrice, quantity, now });
 }
 
-export const quantityLimitsFor = (product: Pick<Product, "id" | "categoryIds">, variationId?: string) =>
-  resolveQuantityLimits(mockQuantityRules, ruleItem(product, variationId));
+/** The line's limits: the product's own (in packages), overridden by any matching quantity rule. */
+export const quantityLimitsFor = (product: Pick<Product, "id" | "categoryIds"> & Partial<Pick<Product, "quantityRule" | "soldIndividually">>, variationId?: string) =>
+  resolveQuantityLimits(mockQuantityRules, ruleItem(product, variationId), product.quantityRule ? { ...product.quantityRule, soldIndividually: product.soldIndividually } : { soldIndividually: product.soldIndividually });

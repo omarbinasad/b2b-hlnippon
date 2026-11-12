@@ -1,5 +1,8 @@
 import { Can } from "@/components/admin/capabilities-context";
 import type { Metadata } from "next";
+import { ProductCsvExport } from "@/components/admin/products/csv-import";
+import { BulkProductBar, BulkSelectAll } from "@/components/admin/products/bulk-bar";
+import { allPages } from "@/lib/data/all-pages";
 import Link from "next/link";
 import { siteConfig } from "@/config/site";
 import { ActionNotice, DemoEditingNotice } from "@/components/admin/demo-notice";
@@ -74,6 +77,7 @@ export default async function AdminProductsPage({ searchParams }: PageProps<"/ad
   const sp = await searchParams;
   const state = listState(sp, SORTS, "name");
   const categories = await repositories.categories.list({ perPage: 48 });
+  const allCategories = await allPages((page, perPage) => repositories.categories.list({ page, perPage }));
   const products = await repositories.products.adminList({
     ...state,
     categorySlug: oneOf(param(sp, "category"), categories.items.map((c) => c.slug)),
@@ -96,7 +100,8 @@ export default async function AdminProductsPage({ searchParams }: PageProps<"/ad
         description="Catalog, variations, stock levels and quantity rules."
         actions={
           <>
-            <Can cap="products.export"><ButtonLink href={`/admin/products/export?${new URLSearchParams(exportParams)}` as "/admin/products"} prefetch={false} variant="secondary">Export CSV</ButtonLink></Can>
+            <Can cap="products.export"><ProductCsvExport query={new URLSearchParams(exportParams).toString()} /></Can>
+            <Can cap="products.create"><ButtonLink href="/admin/products/import" variant="secondary">Import CSV</ButtonLink></Can>
             <ButtonLink href="/admin/categories" variant="secondary">
               <Icon name="folder" className="size-4" /> Categories
             </ButtonLink>
@@ -147,11 +152,13 @@ export default async function AdminProductsPage({ searchParams }: PageProps<"/ad
         />
       ) : (
         <>
+          <BulkProductBar categories={allCategories.map((c) => ({ id: c.id, name: c.name }))} />
           {/* Phones: cards */}
           <ul className="space-y-3 md:hidden">
             {products.items.map((p) => (
               <li key={p.id} className="rounded-ui border border-line bg-surface p-3">
                 <div className="flex gap-3">
+                  <Can cap="products.edit"><input type="checkbox" data-bulk-id={p.id} aria-label={`Select ${p.name}`} className="mt-1 size-4 shrink-0 accent-brand" /></Can>
                   <ProductImage image={p.image} sizes="64px" className="size-16 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{p.name}</p>
@@ -179,6 +186,7 @@ export default async function AdminProductsPage({ searchParams }: PageProps<"/ad
             <Table caption="Products" density="compact">
               <thead>
                 <tr>
+                  <Can cap="products.edit"><th scope="col" className="w-8"><BulkSelectAll /></th></Can>
                   <th scope="col" className="w-14"><span className="sr-only">Image</span></th>
                   <SortHeader label="Product" field="name" {...sorting} />
                   <SortHeader label="SKU" field="sku" {...sorting} />
@@ -193,6 +201,7 @@ export default async function AdminProductsPage({ searchParams }: PageProps<"/ad
               <tbody>
                 {products.items.map((p) => (
                   <tr key={p.id}>
+                    <Can cap="products.edit"><td><input type="checkbox" data-bulk-id={p.id} aria-label={`Select ${p.name}`} className="size-4 accent-brand" /></td></Can>
                     <td>
                       <ProductImage image={p.image} sizes="48px" className="size-12" />
                     </td>

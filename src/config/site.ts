@@ -95,6 +95,7 @@ export const adminNavGroups: NavGroup[] = [
     items: [
       { href: "/admin/pages", label: "Pages", icon: "file" },
       { href: "/admin/posts", label: "Posts", icon: "pencil" },
+      { href: "/admin/blocks", label: "Reusable blocks", icon: "clipboard" },
       { href: "/admin/media", label: "Media library", icon: "image" },
       { href: "/admin/menus", label: "Navigation menus", icon: "menu" },
       { href: "/admin/homepage", label: "Homepage builder", icon: "store" },

@@ -27,23 +27,31 @@ Single source of truth for the "Complete B2B ecommerce frontend" brief. Update i
 | 7 | Shipping manager, conditional rules, tax and payment settings | Done |
 | 8 | Delivery schedules, reminders, email templates and logs | Done |
 | 9 | Roles, staff, capabilities, reports | Done |
-| 10 | API adapter, database docs, backend handoff, final QA | Done; see **Final verification** |
+| 10 | API adapter, database docs, backend handoff, final QA | Done |
+| 11 | Final improvements: package quantities and order limits, publishing checks, quotation payment method, money summary, bulk product changes, product CSV import and export, CMS revisions, autosave and reusable blocks; frontend freeze | Done; see **Final verification** |
 
 ## Final verification
 
-Run on 2026-11-05 on the final build. All browser tests ran in headless Chrome on a separate test server.
+Run on 2026-11-12 (batch 11, frontend freeze). Browser tests ran in headless Chrome against a production build on a separate test server (`next start -p 3100`), one suite at a time, each on a fresh server.
 
 | Check | Result |
 | --- | --- |
 | Type check, lint | No errors or warnings |
-| Unit tests | 334 passed |
+| Unit tests | 409 passed, 0 failed (32 files; new: `product-quantity`, `money-summary`, `product-bulk`, `product-csv`, `cms-revisions-blocks`, postcode inputs) |
 | Production build | Compiled |
-| `npm audit --omit=dev` | 0 vulnerabilities (Next.js 16.4.5) |
-| Browser suites | 18 suites, 914 checks, all passing |
-| Responsive sweep | 109 routes × 375, 390, 430, 768, 1024, 1366px (654 page loads): no server errors, no sideways page scroll |
-| OpenAPI file | Parses; every reference resolves; no duplicate operations; path parameters match |
+| API docs | `npm run docs:api`: 256 repository endpoints, 17 others, 310 types, no warnings. `npm run docs:routes`: 120 pages, 6 handlers |
+| Browser suites, final build | 17 suites, 829 checks, all passing: roles 160, cms 85, verify23 52, b4 37, b5 50, b6 36, b7 46, b8 47, b9 56, qa 67, qa2 15, qa3 45, **f1** 36 (quantity limits, publishing, bulk, CSV), **f2** 23 (quotation payment, money summary), **f3** 52 (blocks, revisions, autosave), **f4** 19 (variable product from scratch, tax classes and exempt, postcode typing), sweep 3 |
+| Browser suites, earlier build the same day | 10 suites, 336 checks, all passing: hero 61, ui2 43, cardqty 20, adminstore 23, steps 29, progress 33, cursor 12, bottom 39, brands 38, brand 38. Not re-run after the last fixes (postcode inputs, quantity precedence, draft and variable-stock rules, dialog wording), which these suites don't exercise |
+| Responsive sweep | 115 of 120 routes × 375, 390, 430, 768, 1024, 1366px (690 page loads): no server errors, no sideways page scroll |
+| New screens at 768 and 430px | Product editor, product list, import, product page, checkout, order pages, quotation, blocks list/new/edit, revisions, page editor, public page and blog post: no sideways scroll (f1–f4) |
+| Dark mode | Revisions screen, blocks (editor preview and public post) checked by screenshot |
+| `npm audit` | Not re-run this batch (last: 0 vulnerabilities on 2026-11-05) |
 
-**Not in the sweep:** `/account/lists/[id]`, `/account/quotations/[id]`, `/admin/quotations/[id]`, `/admin/tax/rates/[id]`, `/preview/[kind]/[id]`, because the sweep had no link to follow to them on fresh sample data. Their phone layout is unverified at these widths.
+**Fixed while testing this batch:** the product page ignored the product's own order limits; a store-wide quantity rule overrode a product's maximum; a new draft failed on empty weight, stock or selling unit; a variable product whose options track their own stock still needed a product-level quantity; five postcode fields were capped at 4 digits although Japanese postcodes have 7 (customer address form, shipping zone, shipping preview, tax rate, tax preview; tests had set values without typing); a page made only of a reusable block couldn't be published; the "Version restored" notice stayed after saving; a stale "coming later" hint on the product tax class.
+
+**Old tests updated for intended changes:** accepting a quote now needs a payment choice when several methods are enabled (b5); updating, scheduling or unpublishing a live page asks first (roles, cms, verify23). The test helper now answers the browser's "leave this page?" prompt, which the editor now shows when you leave with unsaved changes.
+
+**Not in the sweep:** `/account/lists/[id]`, `/account/quotations/[id]`, `/admin/quotations/[id]`, `/admin/tax/rates/[id]`, `/preview/[kind]/[id]`, because the sweep had no link to follow to them on fresh sample data. `/account/quotations/[id]` was checked at 768 and 430px in f2.
 
 **What the browser suites can't show:** they check behaviour and sideways scroll, not appearance. Only some screens were reviewed by eye. Nothing has run against a real backend, and no real phone or Safari has been used: all browser tests ran in headless Chrome.
 
@@ -88,7 +96,9 @@ Run on 2026-11-05 on the final build. All browser tests ran in headless Chrome o
 | Menu builder: nesting, drag and drop | COMPLETED | Browser-checked |
 | Homepage builder: order, visibility, content | COMPLETED | Browser-checked |
 | SEO, sitemap, robots | COMPLETED | Browser-checked |
-| Revisions, autosave, reusable blocks | MISSING | "Where practical" in the brief. Not built |
+| Revisions: history, compare, restore (asks first on a live item) | COMPLETED | Browser-checked (suite f3); rules unit-tested. Newest 25 kept |
+| Autosave: status, recover or discard, browser copy for new items; confirm before changing live content; unsaved-changes warning | COMPLETED | Browser-checked (f3). Stale-save conflicts are BACKEND PENDING |
+| Reusable blocks: list, add, edit, usage, insert into pages and posts, delete refused while used | COMPLETED | Browser-checked (f3), light and dark; markers sanitized and expanded on the server |
 
 ## White label
 
@@ -114,11 +124,16 @@ Run on 2026-11-05 on the final build. All browser tests ran in headless Chrome o
 | Price rule: percent for everyone, tester | COMPLETED | Browser-checked |
 | Price rule: other targets and types, tiers | NEEDS TESTING | Engine unit-tested |
 | Quantity rules | COMPLETED | Browser-checked |
-| Bulk product actions | MISSING | |
+| Bulk product changes with preview: publish, draft, stock status, categories, prices, order limits, archive, delete | COMPLETED | Browser-checked (f1: unpublish, and a stock-status skip for tracked products); every operation unit-tested |
+| Order quantity per product in packages: minimum, maximum, multiples | COMPLETED | Browser-checked (f1): editor validation, product page, export. Precedence with rules unit-tested |
+| Publishing checks: drafts may be incomplete, publishing may not (editor, bulk publish, import) | COMPLETED | Browser-checked (f1); unit-tested |
+| Product CSV import (map, check, import, results) and export (filters or selection, columns, template) | COMPLETED | Browser-checked (f1); unit-tested. Schema in PRODUCT-CSV.md |
 
 ## Customer portal
 
 All browser-checked: overview, orders, order again, saved lists, quotations, profile, addresses, invoices, deliveries. PDF downloads are BACKEND PENDING.
+
+Accepting a quotation: the customer chooses from the enabled payment methods (none pre-selected); with none enabled the screen says so and accept is disabled; the order is created unpaid at the quoted prices. Browser-checked (f2).
 
 ## Orders
 
@@ -131,6 +146,7 @@ All browser-checked: overview, orders, order again, saved lists, quotations, pro
 | Invoice, revision, credit note, frozen seller details | COMPLETED | Browser-checked. Print view is not a PDF |
 | Refund: partial, reason, history | COMPLETED | Recorded only. Real refunds BACKEND PENDING |
 | Coupons: admin, cart, checkout, usage | COMPLETED | Browser-checked |
+| Money summary on admin and customer order pages: original and current total, received, refunds recorded and processed, outstanding, overpaid, refund due, invoice total, credit notes | COMPLETED | Browser-checked (f2) before and after recording a payment; unit-tested |
 
 ## Shipping, tax, payments
 

@@ -1,20 +1,43 @@
 "use client";
 
+import { pickBlocksAction, type BlockChoice } from "@/app/admin/content-actions";
 import { useViewOnly } from "@/components/admin/capabilities-context";
+import { Node } from "@tiptap/core";
 import Image from "@tiptap/extension-image";
 import { TableKit } from "@tiptap/extension-table";
 import TextAlign from "@tiptap/extension-text-align";
 import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { MediaPicker } from "@/components/admin/media/media-picker";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Field, Input } from "@/components/ui/field";
+import { blockKindLabel } from "@/lib/content/blocks";
 import { cx } from "@/lib/cx";
 
+/**
+ * A reusable block in page content: an empty marker (`<div data-block="blk-…" data-name="…">`) that the site replaces
+ * with the block's current content when the page is shown (src/lib/content/blocks.ts). In the editor it shows as a labelled box.
+ */
+const ReusableBlock = Node.create({
+  name: "reusableBlock",
+  group: "block",
+  atom: true,
+  selectable: true,
+  draggable: true,
+  addAttributes() {
+    return {
+      id: { default: null, parseHTML: (el) => el.getAttribute("data-block"), renderHTML: (a) => ({ "data-block": a.id }) },
+      name: { default: "", parseHTML: (el) => el.getAttribute("data-name") ?? "", renderHTML: (a) => ({ "data-name": a.name }) },
+    };
+  },
+  parseHTML: () => [{ tag: "div[data-block]" }],
+  renderHTML: ({ HTMLAttributes }) => ["div", HTMLAttributes],
+});
+
 /** Rich content editor. Stores HTML, which the server sanitizes (src/lib/html/sanitize.ts) on save and when rendered. */
-export default function RichEditor({ id, value, onChange, invalid, describedBy }: { id: string; value: string; onChange: (html: string) => void; invalid?: boolean; describedBy?: string }) {
+export default function RichEditor({ id, value, onChange, invalid, describedBy, blocks = false }: { id: string; value: string; onChange: (html: string) => void; invalid?: boolean; describedBy?: string; /** Offer "Insert block" (pages and posts; not inside a block). */ blocks?: boolean }) {
   const viewOnly = useViewOnly();
   const editor = useEditor({
     editable: !viewOnly,
@@ -24,6 +47,7 @@ export default function RichEditor({ id, value, onChange, invalid, describedBy }
       Image,
       TextAlign.configure({ types: ["heading", "paragraph"] }),
       TableKit.configure({ table: { resizable: false } }),
+      ReusableBlock,
     ],
     content: value,
     editorProps: {
@@ -35,7 +59,7 @@ export default function RichEditor({ id, value, onChange, invalid, describedBy }
         ...(invalid ? { "aria-invalid": "true" } : {}),
         ...(describedBy ? { "aria-describedby": describedBy } : {}),
         class:
-          "min-h-72 px-4 py-3 text-sm leading-6 outline-none [&_a]:text-brand [&_a]:underline [&_blockquote]:border-l-4 [&_blockquote]:border-line [&_blockquote]:pl-4 [&_h2]:mt-4 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-lg [&_h3]:font-semibold [&_h4]:mt-2 [&_h4]:font-semibold [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-ui [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_table]:my-3 [&_table]:w-full [&_td]:border [&_td]:border-line [&_td]:p-2 [&_th]:border [&_th]:border-line [&_th]:bg-surface-muted [&_th]:p-2 [&_ul]:list-disc [&_ul]:pl-6",
+          "cms-editor min-h-72 px-4 py-3 text-sm leading-6 outline-none [&_a]:text-brand [&_a]:underline [&_blockquote]:border-l-4 [&_blockquote]:border-line [&_blockquote]:pl-4 [&_h2]:mt-4 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:mt-3 [&_h3]:text-lg [&_h3]:font-semibold [&_h4]:mt-2 [&_h4]:font-semibold [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-ui [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_table]:my-3 [&_table]:w-full [&_td]:border [&_td]:border-line [&_td]:p-2 [&_th]:border [&_th]:border-line [&_th]:bg-surface-muted [&_th]:p-2 [&_ul]:list-disc [&_ul]:pl-6",
       },
     },
     onUpdate: ({ editor: e }) => onChange(e.getHTML()),
@@ -43,7 +67,7 @@ export default function RichEditor({ id, value, onChange, invalid, describedBy }
 
   return (
     <div className={cx("overflow-hidden rounded-ui border bg-surface focus-within:ring-2 focus-within:ring-brand/40", invalid ? "border-danger" : "border-line")}>
-      {editor ? <Toolbar editor={editor} /> : <div className="h-11 border-b border-line bg-surface-muted" />}
+      {editor ? <Toolbar editor={editor} blocks={blocks} /> : <div className="h-11 border-b border-line bg-surface-muted" />}
       <EditorContent editor={editor} />
     </div>
   );
@@ -69,7 +93,8 @@ function ToolButton({ label, active, disabled, onClick, children }: { label: str
 
 const Sep = () => <span aria-hidden className="mx-1 hidden h-5 w-px bg-line sm:block" />;
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({ editor, blocks }: { editor: Editor; blocks: boolean }) {
+  const [blockOpen, setBlockOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [href, setHref] = useState("");
   const [linkError, setLinkError] = useState("");
@@ -134,6 +159,7 @@ function Toolbar({ editor }: { editor: Editor }) {
       <Sep />
       <ToolButton label="Link" active={s.link} onClick={openLink}>Link</ToolButton>
       <ToolButton label="Image" onClick={() => setMediaOpen(true)}>Image</ToolButton>
+      {blocks && <ToolButton label="Insert reusable block" onClick={() => setBlockOpen(true)}>Block</ToolButton>}
       {s.table ? (
         <>
           <ToolButton label="Add row" onClick={() => chain().addRowAfter().run()}>+ Row</ToolButton>
@@ -158,6 +184,16 @@ function Toolbar({ editor }: { editor: Editor }) {
           </div>
         </div>
       </Dialog>
+      {blocks && (
+        <BlockPicker
+          open={blockOpen}
+          onClose={() => setBlockOpen(false)}
+          onSelect={(b) => {
+            chain().insertContent({ type: "reusableBlock", attrs: { id: b.id, name: b.name } }).run();
+            setBlockOpen(false);
+          }}
+        />
+      )}
       <MediaPicker
         open={mediaOpen}
         onClose={() => setMediaOpen(false)}
@@ -168,5 +204,45 @@ function Toolbar({ editor }: { editor: Editor }) {
         }}
       />
     </div>
+  );
+}
+
+function BlockPicker({ open, onClose, onSelect }: { open: boolean; onClose: () => void; onSelect: (b: BlockChoice) => void }) {
+  const [search, setSearch] = useState("");
+  const [items, setItems] = useState<BlockChoice[] | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    const t = setTimeout(() => pickBlocksAction(search).then((r) => { if (live) setItems(r); }), search ? 250 : 0);
+    return () => { live = false; clearTimeout(t); };
+  }, [open, search]);
+  return (
+    <Dialog open={open} onClose={onClose} title="Insert a reusable block" description="The page shows the block's current content, so later edits to the block appear here too.">
+      <div className="space-y-3">
+        <Field id="block-search" label="Search blocks">
+          <Input id="block-search" type="search" value={search} placeholder="Name or text" onChange={(e) => setSearch(e.target.value)} />
+        </Field>
+        <ul className="max-h-80 divide-y divide-line overflow-y-auto rounded-ui border border-line" aria-label="Blocks">
+          {items === null ? (
+            <li className="p-3 text-sm text-muted">Loading…</li>
+          ) : items.length ? (
+            items.map((b) => (
+              <li key={b.id}>
+                <button type="button" onClick={() => onSelect(b)} className="block w-full p-3 text-left hover:bg-surface-muted">
+                  <span className="flex flex-wrap items-center gap-2 text-sm font-medium">{b.name}<span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-normal text-muted">{blockKindLabel(b.kind)}</span></span>
+                  <span className="mt-0.5 line-clamp-2 block text-xs text-muted">{b.preview}</span>
+                </button>
+              </li>
+            ))
+          ) : (
+            <li className="p-3 text-sm text-muted">No blocks found.</li>
+          )}
+        </ul>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <a href="/admin/blocks" target="_blank" rel="noopener" className="text-sm font-medium text-brand hover:underline">Manage blocks (opens a new tab)</a>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }

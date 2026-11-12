@@ -12,7 +12,7 @@ import { accountSummary, deleteRoute, deliveryLocations, invoiceList, routeDetai
 import { mockMediaRepository } from "./mock-media";
 import { mockCustomerRepository, mockLocationRepository } from "./mock-customers";
 import { mockDeliveryRoutes, mockReminders } from "./mock/pricing-delivery";
-import { mockNavigationRepository, mockPageRepository, mockPostRepository, mockSiteContentRepository } from "./mock-content";
+import { mockNavigationRepository, mockPageRepository, mockPostRepository, mockSiteContentRepository, mockContentBlockRepository, mockContentHistoryRepository } from "./mock-content";
 import { mockAdminNotificationRepository } from "./mock-admin-notifications";
 import { mockContactRepository } from "./mock-contact";
 import { mockPricingRepository, mockQuantityRuleRepository } from "./mock-pricing";
@@ -41,6 +41,8 @@ export const mockRepositories: Repositories = {
   pages: mockPageRepository,
   navigation: mockNavigationRepository,
   siteContent: mockSiteContentRepository,
+  contentHistory: mockContentHistoryRepository,
+  blocks: mockContentBlockRepository,
 
   products: mockProductRepository,
   categories: mockCategoryRepository,

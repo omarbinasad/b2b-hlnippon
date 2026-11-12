@@ -9,15 +9,16 @@ import { repositories } from "@/lib/data";
 
 export const metadata: Metadata = { title: "Edit post" };
 
-export default async function EditPostPage({ params }: PageProps<"/admin/posts/[id]">) {
-  const item = await repositories.posts.getById((await params).id);
+export default async function EditPostPage({ params, searchParams }: PageProps<"/admin/posts/[id]">) {
+  const [{ id }, sp] = await Promise.all([params, searchParams]);
+  const [item, autosave, revisions] = await Promise.all([repositories.posts.getById(id), repositories.contentHistory.getAutosave("post", id), repositories.contentHistory.revisions("post", id)]);
   if (!item) notFound();
   return (
     <>
       <Link href="/admin/posts" className="text-sm text-muted hover:text-foreground">← All posts</Link>
       <PageHeader title={item.title} description={`By ${item.authorName}`} />
       {item.status === "trash" && <div className="mb-4"><Notice tone="warning" title="This post is in the trash">Saving moves it out of the trash.</Notice></div>}
-      <ContentForm kind="post" item={item} categories={await repositories.posts.categories()} tagOptions={(await repositories.posts.terms("tag")).map((t) => t.name)} />
+      <ContentForm kind="post" item={item} autosave={autosave} revisionCount={revisions.length} restored={sp.restored === "1"} categories={await repositories.posts.categories()} tagOptions={(await repositories.posts.terms("tag")).map((t) => t.name)} />
       <div className="mt-6"><DemoEditingNotice /></div>
     </>
   );

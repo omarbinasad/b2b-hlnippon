@@ -279,7 +279,7 @@ export function TaxPanel({ draft, update, errors, taxClasses }: SectionProps & {
         path="taxClass"
         label="Tax class"
         errors={errors}
-        hint={draft.type === "variable" ? "Default for variations; each can override it. Rates come from tax settings (later)." : "Rates come from tax settings (coming later)."}
+        hint={draft.type === "variable" ? "Default for variations; each can override it. Rates come from Tax settings." : "Rates come from Tax settings."}
         value={draft.taxClass}
         onChange={(v) => update({ taxClass: v as ProductDraft["taxClass"] })}
       >

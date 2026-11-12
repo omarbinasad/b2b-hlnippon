@@ -312,17 +312,33 @@ export function compareQuantityRules(a: QuantityLimitRule, b: QuantityLimitRule)
 export interface QuantityLimits {
   min: number;
   max?: number;
+  /** Order in multiples of this (the product's own setting; rules don't change it). */
+  step?: number;
   rule?: QuantityLimitRule;
   candidates: { rule: QuantityLimitRule; outcome: CandidateOutcome; reason: string }[];
   explanation: string;
 }
 
-export function resolveQuantityLimits(rules: QuantityLimitRule[], item: RuleItem): QuantityLimits {
+/**
+ * `base` is the product's own setting. A matching rule overrides it; whatever the rule leaves empty comes from `base`.
+ * "Sold individually" caps the maximum at 1.
+ */
+export function resolveQuantityLimits(rules: QuantityLimitRule[], item: RuleItem, base?: { min?: number; max?: number; step?: number; soldIndividually?: boolean }): QuantityLimits {
+  const result = resolveRuleLimits(rules, item, base);
+  const step = Math.max(1, base?.step ?? 1);
+  if (base?.soldIndividually) return { ...result, min: 1, max: 1, step: 1, explanation: `${result.explanation} The product is sold individually, so the maximum is 1.` };
+  return { ...result, step };
+}
+
+function resolveRuleLimits(rules: QuantityLimitRule[], item: RuleItem, base?: { min?: number; max?: number }): QuantityLimits {
+  const baseMin = Math.max(DEFAULT_MIN_QUANTITY, base?.min ?? DEFAULT_MIN_QUANTITY);
+  const baseMax = base?.max;
   const relevant = rules.filter((r) => targetMatches(r.target, item));
   const active = relevant.filter((r) => r.status === "active").sort(compareQuantityRules);
   const skipped = relevant.filter((r) => r.status !== "active").map((rule) => ({ rule, outcome: "skipped" as const, reason: "Disabled." }));
   const winner = active[0];
   if (!winner) {
+    if (base && (base.min !== undefined || base.max !== undefined)) return { min: baseMin, max: baseMax, candidates: skipped, explanation: `No active quantity rule matches, so the product's own limits apply: at least ${baseMin}${baseMax !== undefined ? `, at most ${baseMax}` : ", no maximum"}.` };
     return { min: DEFAULT_MIN_QUANTITY, candidates: skipped, explanation: `No active quantity rule matches, so the default applies: at least ${DEFAULT_MIN_QUANTITY}, no maximum.` };
   }
   const others = active.slice(1).map((rule) => ({
@@ -335,22 +351,39 @@ export function resolveQuantityLimits(rules: QuantityLimitRule[], item: RuleItem
           ? `Same target level; lower priority (${rule.priority} < ${winner.priority}).`
           : `Conflict: same target level and priority — the older rule “${winner.name}” wins.`,
   }));
-  const min = winner.minQuantity ?? DEFAULT_MIN_QUANTITY;
+  const candidates = [{ rule: winner, outcome: "winner" as const, reason: others.length ? "Most specific active rule." : "The only active rule." }, ...others, ...skipped];
+  // A product's own limits (a minimum above 1, or any maximum) are more specific than a category or store-wide rule,
+  // so they win over those; a rule for the product or one of its variations overrides them.
+  const broad = winner.target.type === "categories" || winner.target.type === "all";
+  const ownMin = base?.min !== undefined && base.min > DEFAULT_MIN_QUANTITY ? baseMin : undefined;
+  if (broad && (ownMin !== undefined || baseMax !== undefined)) {
+    const min = ownMin ?? winner.minQuantity ?? baseMin;
+    const max = baseMax ?? winner.maxQuantity;
+    return {
+      min,
+      max,
+      rule: winner,
+      candidates,
+      explanation: `The product's own limits apply first: at least ${min}${max !== undefined ? `, at most ${max}` : ", no maximum"}. “${winner.name}” (${targetLevelLabel[winner.target.type]} level) only fills in what the product leaves empty.`,
+    };
+  }
+  const min = winner.minQuantity ?? baseMin;
   return {
     min,
-    max: winner.maxQuantity,
+    max: winner.maxQuantity ?? baseMax,
     rule: winner,
-    candidates: [{ rule: winner, outcome: "winner", reason: others.length ? "Most specific active rule." : "The only active rule." }, ...others, ...skipped],
+    candidates,
     explanation:
       `“${winner.name}” (${targetLevelLabel[winner.target.type]} level) sets min ${min}${winner.maxQuantity !== undefined ? `, max ${winner.maxQuantity}` : ", no maximum"} per order line.` +
-      (winner.minQuantity === undefined ? " It sets no minimum, so the default of 1 applies." : ""),
+      (winner.minQuantity === undefined ? ` It sets no minimum, so ${base?.min !== undefined ? "the product's own" : "the default of"} ${baseMin} applies.` : ""),
   };
 }
 
 /** Error message when a line quantity breaks the limits. */
-export function checkQuantity(limits: Pick<QuantityLimits, "min" | "max">, quantity: number) {
+export function checkQuantity(limits: Pick<QuantityLimits, "min" | "max" | "step">, quantity: number) {
   if (quantity < limits.min) return `Minimum ${limits.min} per order line.`;
   if (limits.max !== undefined && quantity > limits.max) return `Maximum ${limits.max} per order line.`;
+  if (limits.step && limits.step > 1 && quantity % limits.step !== 0) return `Order in multiples of ${limits.step}.`;
   return undefined;
 }
 

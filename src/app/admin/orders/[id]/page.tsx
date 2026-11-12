@@ -15,6 +15,7 @@ import { RecordPaymentButton } from "@/components/admin/orders/record-payment";
 import { RefundButton } from "@/components/admin/orders/refund-dialog";
 import { ShippingChargeButton } from "@/components/admin/orders/shipping-charge";
 import { DeleteOrderButton } from "@/components/admin/orders/delete-order";
+import { MoneySummary } from "@/components/order/money-summary";
 import { OrderStatusControls } from "@/components/admin/orders/status-controls";
 import { AddressBlock, OrderItemsTable, OrderTotalsList, StatusHistoryList, StatusProgress } from "@/components/order/order-details";
 import { Badge, OrderStatusBadge, PaymentStatusBadge } from "@/components/ui/badge";
@@ -318,14 +319,8 @@ export default async function AdminOrderPage({ params, searchParams }: PageProps
               <div><dt className="text-muted">Status</dt><dd><PaymentStatusBadge status={order.paymentStatus} /></dd></div>
               {order.payment.reference && <div><dt className="text-muted">Reference</dt><dd className="break-all">{order.payment.reference}</dd></div>}
               {order.payment.paidAt && <div><dt className="text-muted">Paid</dt><dd>{formatDateTime(order.payment.paidAt)}</dd></div>}
-              {order.payment.amountPaid !== undefined && <div><dt className="text-muted">Already paid</dt><dd className="tabular-nums">{formatMoney(order.payment.amountPaid)}</dd></div>}
-              {balance !== undefined && balance !== 0 && (
-                <div>
-                  <dt className="text-muted">{balance > 0 ? "Balance due" : "Overpaid"}</dt>
-                  <dd className={balance < 0 ? "font-medium text-danger tabular-nums" : "font-medium tabular-nums"}>{formatMoney(Math.abs(balance))}</dd>
-                </div>
-              )}
             </dl>
+            <div className="mt-3"><MoneySummary order={order} staff /></div>
             {balance !== undefined && balance !== 0 && (
               <p className="mt-2 text-xs text-muted">
                 {balance > 0

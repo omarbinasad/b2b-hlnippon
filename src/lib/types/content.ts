@@ -148,6 +148,10 @@ export interface HeroSlide {
   image: SiteImage | null;
   /** The photo for the dark theme. Without one, the light photo is used in both. */
   imageDark?: SiteImage | null;
+  /** Optional photos for phones (under 640px wide), usually portrait. Without them phones show the banner photos, cropped. */
+  imageMobile?: SiteImage | null;
+  /** Phone photo for the dark theme. Without one, the phone light-theme photo is used (or the dark banner if there is no phone photo). */
+  imageMobileDark?: SiteImage | null;
   /** Shown when there is no image. */
   icons: string[];
 }
@@ -195,3 +199,78 @@ export interface SiteContent {
 }
 
 export type SiteContentInput = Pick<SiteContent, "topBar" | "sections" | "about">;
+
+// --- Revisions, autosave and reusable blocks (docs/CMS-AND-CONTENT-MANAGEMENT.md) ---------------
+
+export type ContentKind = "page" | "post";
+
+/** The editable fields of a page or post, as kept in a revision or an autosave. Status and dates aren't part of it. */
+export interface ContentSnapshot {
+  title: string;
+  slug: string;
+  excerpt: string;
+  bodyHtml: string;
+  image?: ProductImage;
+  seo: SeoFields;
+  /** Pages only. */
+  visibility?: PageVisibility;
+  /** Posts only. */
+  categories?: string[];
+  tags?: string[];
+}
+
+/** One saved version of a page or post. Kept on every save that changes the content (the newest 25 per item). */
+export interface ContentRevision {
+  id: ID;
+  kind: ContentKind;
+  itemId: ID;
+  createdAt: ISODateString;
+  authorName: string;
+  /** The item's status right after this version was saved. */
+  status: ContentStatus;
+  /** "Saved", "Original version" or "Restored from …". */
+  note: string;
+  snapshot: ContentSnapshot;
+}
+
+/** A revision in the history list, without its content. */
+export type ContentRevisionSummary = Omit<ContentRevision, "snapshot"> & { title: string; words: number };
+
+/**
+ * Unsaved editing work kept by the server while someone edits. It never changes the page or post itself: the editor
+ * offers it back when it is newer than the saved version. The demo keeps one per item; the backend keeps one per user per item.
+ */
+export interface ContentAutosave {
+  kind: ContentKind;
+  itemId: ID;
+  savedAt: ISODateString;
+  authorName: string;
+  snapshot: ContentSnapshot;
+}
+
+export type ContentBlockKind = "announcement" | "banner" | "cta" | "contact" | "productPromo";
+
+/** Reusable content written once and inserted into many pages or posts. Editing it changes every page that uses it. */
+export interface ContentBlock {
+  id: ID;
+  name: string;
+  kind: ContentBlockKind;
+  /** Sanitized like page content. Can't contain other blocks. */
+  bodyHtml: string;
+  authorName: string;
+  createdAt: ISODateString;
+  updatedAt: ISODateString;
+}
+
+export type ContentBlockInput = Pick<ContentBlock, "name" | "kind" | "bodyHtml">;
+
+/** A block in the admin list, with how many pages and posts (not in the trash) use it. */
+export type ContentBlockSummary = ContentBlock & { usedBy: number };
+
+/** A page or post that contains a block. */
+export interface ContentBlockUse {
+  kind: ContentKind;
+  id: ID;
+  title: string;
+  status: ContentStatus;
+}

@@ -152,15 +152,17 @@ export interface StockMovement {
 export type BackorderPolicy = "no" | "notify" | "allow";
 
 /**
- * Per-product ordering settings. `step` (pack multiple) is still a product setting.
- * `min`/`max` are LEGACY: per-line limits now come from quantity rules
- * (QuantityLimitRule, resolved by src/lib/pricing/engine.ts); the seeded values were migrated there.
+ * The product's own order limits, counted in PACKAGES (bags, cases, cartons), never in weight. Precedence
+ * (resolveQuantityLimits in src/lib/pricing/engine.ts): a quantity rule for the option or the product overrides them;
+ * these beat a category or store-wide rule (a minimum of 1 counts as "not set"); whatever is still empty comes from the
+ * rule, then the default (at least 1, no maximum). The step always comes from here.
  */
 export interface QuantityRule {
-  /** @deprecated Use the effective quantity rule (repositories.quantityRules.effectiveFor). */
+  /** Minimum packages per order line. At least 1. */
   min: number;
-  /** @deprecated Use the effective quantity rule (repositories.quantityRules.effectiveFor). */
+  /** Maximum packages per order line. Empty = no limit. */
   max?: number;
+  /** Order in multiples of this many packages. 1 = any whole number (the normal case). */
   step: number;
 }
 
@@ -397,6 +399,10 @@ export interface VariationInput {
 }
 
 export interface ProductInput {
+  /** Order limits in packages (see QuantityRule). `quantityStep` 1 = no increment. */
+  minQuantity: number;
+  maxQuantity?: number;
+  quantityStep: number;
   type: ProductType;
   name: string;
   slug: string;
@@ -449,4 +455,91 @@ export interface CategoryInput {
   description?: string;
   status: CategoryStatus;
   image?: ProductImage;
+}
+
+// --- Bulk product changes (rules in src/lib/catalog/bulk.ts) ------------------------------------
+
+/** How a regular price changes: set it, or raise / lower it by a percentage or an amount. */
+export type PriceMode = "set" | "increase_percent" | "decrease_percent" | "increase_fixed" | "decrease_fixed";
+export type SaleMode = "set" | "percent_off" | "clear";
+
+export type BulkOperation =
+  | { kind: "status"; status: ProductStatus }
+  | { kind: "stock"; status: "in_stock" | "out_of_stock" }
+  | { kind: "categories"; mode: "add" | "replace" | "remove"; categoryIds: string[] }
+  | { kind: "regularPrice"; mode: PriceMode; value: number }
+  | { kind: "salePrice"; mode: SaleMode; value?: number }
+  | { kind: "quantities"; min?: number; max?: number | null; step?: number }
+  | { kind: "delete" };
+
+export interface BulkChange {
+  /** Readable field, e.g. "Price" or "Price · 5 kg". */
+  label: string;
+  before: string | Money | null;
+  after: string | Money | null;
+  /** The values are amounts of money (the screen formats them). */
+  money?: boolean;
+}
+
+export interface BulkRow {
+  productId: string;
+  name: string;
+  sku: string;
+  changes: BulkChange[];
+  /** Why this product is skipped. */
+  problem?: string;
+}
+
+/** POST /admin/products/bulk body. */
+export interface BulkProductRequest {
+  ids: ID[];
+  operation: BulkOperation;
+  /** false = preview only. */
+  apply: boolean;
+}
+
+/** POST /admin/products/bulk response: one row per product, and how many were changed. */
+export interface BulkProductResult {
+  rows: BulkRow[];
+  applied: number;
+}
+
+// --- Product CSV import and export (rules in src/lib/catalog/csv.ts and csv-import.ts) -----------
+
+/** A column of the product CSV. Labels and meanings: PRODUCT_CSV_FIELDS in src/lib/catalog/csv.ts. */
+export type ProductCsvField =
+  | "id" | "type" | "sku" | "parentSku" | "name" | "status" | "categories" | "regularPrice" | "salePrice"
+  | "manageStock" | "stock" | "stockStatus" | "weight" | "weightUnit" | "unitLabel" | "minQuantity" | "maxQuantity"
+  | "quantityStep" | "pricedByWeight" | "taxClass" | "shortDescription" | "description" | "attributeName" | "attributeValues";
+
+/** One file row after column matching: raw text per field. The server parses and checks every value. */
+export interface ProductImportRow {
+  /** Line in the file (the header is line 1). */
+  line: number;
+  values: Partial<Record<ProductCsvField, string>>;
+}
+
+export interface ProductImportRowResult {
+  line: number;
+  sku: string;
+  name: string;
+  action: "create" | "update" | "skip";
+  /** Why the row is skipped. */
+  errors: string[];
+  /** Imported, but worth knowing. */
+  warnings: string[];
+}
+
+/** POST /admin/products/import body. */
+export interface ProductImportRequest {
+  rows: ProductImportRow[];
+  /** false = check only. */
+  apply: boolean;
+}
+
+export interface ProductImportResult {
+  rows: ProductImportRowResult[];
+  created: number;
+  updated: number;
+  skipped: number;
 }

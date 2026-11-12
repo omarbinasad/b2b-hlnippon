@@ -7,7 +7,9 @@
 import { revalidatePath } from "next/cache";
 import { actorWith } from "@/lib/auth/session";
 import { repositories } from "@/lib/data";
-import type { ContentInput, ContentStatus, FieldErrors, MenuItem, MenuLocation, ProductImage, SiteContentInput } from "@/lib/types";
+import { isBlockKind } from "@/lib/content/blocks";
+import { htmlToText } from "@/lib/html/sanitize";
+import type { ContentBlockKind, ContentInput, ContentKind, ContentSnapshot, ContentStatus, FieldErrors, MenuItem, MenuLocation, ProductImage, SiteContentInput } from "@/lib/types";
 
 export type ContentActionResult<T = { id: string }> = { ok: true; value: T } | { ok: false; errors: FieldErrors; message: string };
 
@@ -62,6 +64,76 @@ export async function savePostAction(id: string | null, raw: unknown): Promise<C
   if (!by) return denied;
   const v = obj(raw);
   return result(await repositories.posts.save(id, { ...contentInput(raw), categories: list(v.categories), tags: list(v.tags, 30) }, by));
+}
+
+// --- Revisions and autosave --------------------------------------------------------------------
+
+const kindOf = (v: unknown): ContentKind => (v === "post" ? "post" : "page");
+const editCap = (kind: ContentKind) => (kind === "page" ? "pages.edit" : "posts.edit");
+
+/** The form's fields as a snapshot (the same limits as a save). */
+function snapshot(kind: ContentKind, raw: unknown): ContentSnapshot {
+  const { slug, title, excerpt, bodyHtml, image: img, seo } = contentInput(raw);
+  const v = obj(raw);
+  const base = { slug, title, excerpt, bodyHtml, image: img, seo };
+  return kind === "page" ? { ...base, visibility: v.visibility === "customers" ? "customers" : "public" } : { ...base, categories: list(v.categories), tags: list(v.tags, 30) };
+}
+
+export type AutosaveResult = { ok: true; savedAt: string } | { ok: false; message: string };
+
+/** Keeps unsaved work for an existing page or post. Never changes what visitors see. */
+export async function autosaveContentAction(rawKind: ContentKind, id: string, raw: unknown): Promise<AutosaveResult> {
+  const kind = kindOf(rawKind);
+  const by = await actorWith(editCap(kind));
+  if (!by) return { ok: false, message: denied.message };
+  const r = await repositories.contentHistory.autosave(kind, String(id), snapshot(kind, raw), by);
+  return r.ok ? { ok: true, savedAt: r.value.savedAt } : { ok: false, message: r.message ?? "Couldn't autosave." };
+}
+
+export async function discardAutosaveAction(rawKind: ContentKind, id: string): Promise<ContentActionResult> {
+  const kind = kindOf(rawKind);
+  const by = await actorWith(editCap(kind));
+  if (!by) return denied;
+  await repositories.contentHistory.discardAutosave(kind, String(id), by);
+  return { ok: true, value: { id: String(id) } };
+}
+
+export async function restoreRevisionAction(rawKind: ContentKind, id: string, revisionId: string): Promise<ContentActionResult> {
+  const kind = kindOf(rawKind);
+  const by = await actorWith(editCap(kind));
+  if (!by) return denied;
+  const r = await repositories.contentHistory.restoreRevision(kind, String(id), String(revisionId), by);
+  if (!r.ok) return { ok: false, errors: r.errors, message: r.message ?? "That version can't be restored." };
+  refresh();
+  return { ok: true, value: { id: String(id) } };
+}
+
+// --- Reusable blocks ---------------------------------------------------------------------------
+
+export async function saveBlockAction(id: string | null, raw: unknown): Promise<ContentActionResult> {
+  const by = await actorWith(id ? "pages.edit" : "pages.create");
+  if (!by) return denied;
+  const v = obj(raw);
+  const kind: ContentBlockKind = isBlockKind(v.kind) ? v.kind : "announcement";
+  return result(await repositories.blocks.save(id, { name: str(v.name, 120), kind, bodyHtml: str(v.bodyHtml, 60_000) }, by));
+}
+
+export async function deleteBlockAction(id: string): Promise<ContentActionResult> {
+  const by = await actorWith("pages.delete");
+  if (!by) return denied;
+  const r = await repositories.blocks.remove(String(id), by);
+  if (!r.ok) return { ok: false, errors: r.errors, message: r.message ?? "That block couldn't be deleted." };
+  refresh();
+  return { ok: true, value: { id: String(id) } };
+}
+
+export type BlockChoice = { id: string; name: string; kind: ContentBlockKind; preview: string };
+
+/** Blocks for the editor's "Insert block" dialog: anyone who can edit pages or posts may insert one. */
+export async function pickBlocksAction(search: string): Promise<BlockChoice[]> {
+  if (!(await actorWith("pages.edit")) && !(await actorWith("posts.edit"))) return [];
+  const { items } = await repositories.blocks.list({ search: str(search, 100) || undefined, perPage: 20 });
+  return items.map((b) => ({ id: b.id, name: b.name, kind: b.kind, preview: htmlToText(b.bodyHtml).slice(0, 140) }));
 }
 
 /** Row actions on the Pages and Posts lists. */

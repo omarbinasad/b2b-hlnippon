@@ -9,6 +9,7 @@ import { RichText } from "@/components/ui/rich-text";
 import { expectedImageFiles } from "@/config/storefront";
 import { seoMetadata } from "@/lib/content/seo";
 import { repositories } from "@/lib/data";
+import { withBlocks } from "@/lib/data/expand-blocks";
 import { formatDate } from "@/lib/format";
 
 export async function generateMetadata({ params }: PageProps<"/blog/[slug]">): Promise<Metadata> {
@@ -56,7 +57,7 @@ export default async function BlogPostPage({ params }: PageProps<"/blog/[slug]">
 
           <RichText
             rich
-            value={post.bodyHtml}
+            value={await withBlocks(post.bodyHtml)}
             className="mt-8 max-w-2xl !space-y-4 text-base leading-7 [&_h2]:!mt-8 [&_h2]:!text-xl [&_h2]:leading-snug sm:[&_h2]:!text-2xl [&_ul]:space-y-1.5"
           />
 

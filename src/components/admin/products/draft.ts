@@ -125,6 +125,9 @@ export interface ProductDraft {
   backorders: BackorderPolicy;
   lowStockThreshold: string;
   soldIndividually: boolean;
+  minQuantity: string;
+  maxQuantity: string;
+  quantityStep: string;
   initialStock: string;
   unitOfMeasure: string;
   weightValue: string;
@@ -251,6 +254,9 @@ export function draftFromProduct(
     backorders: p?.backorders ?? "no",
     lowStockThreshold: str(p?.lowStockThreshold),
     soldIndividually: p?.soldIndividually ?? false,
+    minQuantity: str(p?.quantityRule?.min ?? 1),
+    maxQuantity: str(p?.quantityRule?.max),
+    quantityStep: str(p?.quantityRule?.step ?? 1),
     initialStock: str(p?.initialStock),
     unitOfMeasure: p?.unitOfMeasure ?? "",
     weightValue: str(p?.weight.value),
@@ -328,14 +334,19 @@ export function draftToInput(d: ProductDraft): ProductInput {
     taxStatus: d.taxStatus,
     taxClass: d.taxClass,
     manageStock: d.manageStock,
-    stockQuantity: d.manageStock ? parseNum(d.stockQuantity) : undefined,
+    // A draft may leave stock empty (0); publishing a tracked product needs the number.
+    stockQuantity: d.manageStock ? (parseNum(d.stockQuantity) ?? (d.status === "published" ? undefined : 0)) : undefined,
     stockStatus: d.stockStatus,
     backorders: d.backorders,
     lowStockThreshold: parseNum(d.lowStockThreshold),
     soldIndividually: d.soldIndividually,
+    minQuantity: parseNum(d.minQuantity) ?? 1,
+    maxQuantity: parseNum(d.maxQuantity),
+    quantityStep: parseNum(d.quantityStep) ?? 1,
     initialStock: parseNum(d.initialStock),
     unitOfMeasure: d.unitOfMeasure.trim() || undefined,
-    weight: { value: parseNum(d.weightValue) ?? Number.NaN, unit: d.weightUnit },
+    // Empty = 0: a draft may leave it out; publishing asks for the package weight.
+    weight: { value: parseNum(d.weightValue) ?? 0, unit: d.weightUnit },
     dimensions: dimsInput(d.dims),
     shippingClassId: d.shippingClassId || undefined,
     isVariableWeight: d.isVariableWeight,

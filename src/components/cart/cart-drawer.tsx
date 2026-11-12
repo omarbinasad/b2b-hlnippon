@@ -2,8 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { removeCartLineAction, updateCartLineAction } from "@/app/(store)/actions";
+import { bottomNavItem, isCurrentPath } from "@/components/layout/bottom-nav-link";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { cx } from "@/lib/cx";
@@ -27,6 +29,8 @@ export function CartDrawer({ access, cart, showLabel, stacked, className }: { ac
   const ref = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const count = cart?.lines.length ?? 0;
+  // In the phone menu the cart is highlighted on the cart page.
+  const onCartPage = isCurrentPath(usePathname(), "/cart");
 
   useEffect(() => {
     const d = ref.current;
@@ -42,10 +46,10 @@ export function CartDrawer({ access, cart, showLabel, stacked, className }: { ac
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-label={count > 0 ? `Cart (${count})` : "Cart"}
-        className={cx("relative inline-flex items-center rounded-ui font-medium text-muted hover:text-foreground", stacked ? "flex-col gap-1" : "gap-2 px-2 py-2 text-sm", className)}
+        className={cx(stacked ? bottomNavItem(onCartPage) : "relative inline-flex items-center gap-2 rounded-ui px-2 py-2 text-sm font-medium text-muted hover:text-foreground", className)}
       >
         <span className="relative">
-          <Icon name="cart" className={stacked ? "size-6" : "size-5"} />
+          <Icon name="cart" className={stacked ? cx("size-6 transition-transform duration-300", onCartPage && "-translate-y-px scale-110") : "size-5"} />
           {count > 0 && (
             <span aria-hidden="true" className="absolute -top-2 -right-2.5 grid h-4 min-w-4 place-items-center rounded-full bg-brand px-1 text-[0.625rem] leading-none font-semibold text-brand-contrast tabular-nums">
               {count > 99 ? "99+" : count}

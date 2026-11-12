@@ -246,7 +246,7 @@ Validation: `validateAddress` in `validation/customer.ts`. Deleting an address n
 | weight | weight | Required, above 0 |
 | dimensions | `{length, width, height, unit: cm\|mm\|m}`, opt | All above 0 |
 | shippingClassId | ID, opt | Must exist |
-| quantityRule | `{min, max?, step}` | `step` (pack multiple) is live. `min` and `max` are deprecated: limits come from quantity rules. The product form never edits this |
+| quantityRule | `{min, max?, step}` | The product's own order limits **in packages** (never weight), edited under Inventory → Order quantity. `min` int ≥ 1 (default 1); `max` int ≥ min or null (no limit); `step` int ≥ 1 (default 1, "order in multiples of"); min and max multiples of step. Precedence against quantity rules: BUSINESS-RULES.md §3. Store as three columns (`min_quantity`, `max_quantity` nullable, `quantity_step`). In `ProductInput` they arrive as `minQuantity`, `maxQuantity`, `quantityStep` |
 | defaultAttributes | json map, opt | Must be a valid value of a variation attribute |
 | upsellIds, crossSellIds | ID lists | Up to 20 each; not self; must exist |
 | purchaseNote | string, opt | Up to 1000. Shown after purchase |
@@ -306,7 +306,7 @@ Up to 100 variations per product. A variable product needs at least one attribut
 | --- | --- | --- |
 | manageStock | bool | Product level: count (true) or set a status by hand (false) |
 | stock.status | enum(in_stock, low_stock, out_of_stock, backorder) | Derived when counted: `≤ 0` out, `≤ threshold` low, else in stock (`stockFrom` in `data/mock-catalog.ts`). No code derives `backorder` |
-| stock.quantity | int, opt | Whole number ≥ 0 when counted |
+| stock.quantity | int, opt | Whole number ≥ 0 when counted. A draft may leave it empty (saved as 0) |
 | backorders | enum(no, notify, allow) | |
 | lowStockThreshold | int, opt | Absent = store default. Mock default is 12 |
 | soldIndividually | bool | "Limit to one unit per order". Not enforced anywhere today, see §9 |
@@ -554,6 +554,8 @@ Snapshot contents: order number, placed date, customer name, walk-in, email, pho
 | orderId, orderNumber | opt | Set when accepted |
 | createdAt, updatedAt | datetime | |
 
+Accepting needs a payment method id from the methods enabled at that moment; it is stored on the created order (`order.payment.method`), not on the quotation. The order starts unpaid.
+
 Quotation items (`QuotationItem`): `id`, `productId`, `variationId` (opt), `name`, `sku`, `optionLabel` (opt) (all **SNAP**), `quantity` (int ≥ 1), `quotedUnitPrice` (money, opt). Quotation events (`QuotationEvent`), append-only: `id`, `status`, `at`, `byName`, `note`.
 
 **Saved lists** (`SavedList`): `id`, `customerId`, `name` (2 to 60), `createdAt`, `updatedAt`. Items (`SavedListItem`): `id`, `productId`, `variationId` (opt), `quantity` (int ≥ 1). Same product and option adds to the existing line. No prices or snapshots: lines show live details and this customer's current price. Scoped to the owner. Name uniqueness is not checked.
@@ -711,6 +713,36 @@ Keep the original seed text: `resetTemplate` restores it.
 Pages add `visibility` enum(public, customers). Posts add `categories` and `tags` (string lists, 12 each after dedupe; at least one category to publish), `tag` (first category), `readingMinutes` (derived).
 
 **Blog terms.** Categories and tags are plain strings on posts, not entities. `saveTerm` also keeps terms with no posts (`extraTerms`), renames across every post, and compares case-insensitively (2 to 40 characters). A normalised term table is reasonable if the API stays string-based.
+
+**Content revisions** (`ContentRevision`): one row per saved version of a page or post.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | ID | |
+| kind | enum(page, post) | With `itemId`, points at the page or post. Index (`kind`, `itemId`, `createdAt` desc) |
+| itemId | ID | Delete the rows when the item is deleted for good |
+| createdAt | datetime | |
+| authorName | string | **SNAP**. Better: also an author user id |
+| status | enum | The item's status right after this save |
+| note | string | "Saved", "Original version", "Restored from an earlier version" |
+| snapshot | json | `ContentSnapshot`: title, slug, excerpt, bodyHtml (sanitized), image, seo, plus visibility (pages) or categories and tags (posts) |
+
+Keep the newest 25 per item. A row is added only when the content differs from the newest one.
+
+**Content autosaves** (`ContentAutosave`): `kind`, `itemId`, `savedAt`, `authorName` (**SNAP**), `snapshot` (json, as above). **Unique per (user, kind, itemId)** in production (the demo keeps one per item). Deleted when the item is saved or the autosave is discarded. Never read by public endpoints.
+
+**Reusable blocks** (`ContentBlock`)
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| id | ID | `blk-` followed by 1 to 40 of `a-z 0-9 -`: pages refer to blocks by this id inside their HTML, and the sanitizer only keeps markers with ids of this shape |
+| name | string | 2 to 80. **Unique, case-insensitive** |
+| kind | enum(announcement, banner, cta, contact, productPromo) | |
+| bodyHtml | text | Up to 50,000. Sanitized like page content; block markers removed |
+| authorName | string | **SNAP** at creation |
+| createdAt, updatedAt | datetime | |
+
+Usage isn't stored: pages and posts hold markers (`<div data-block="blk-…" data-name="…"></div>`) in `bodyHtml`. To list usage or refuse a delete, search the bodies, or keep a `content_block_usage` (block id, kind, item id) table updated on every page or post save.
 
 **Media** (`MediaItem`, `types/media.ts`)
 

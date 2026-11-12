@@ -9,7 +9,7 @@ A complete Next.js frontend running on in-memory demo data. Every page reads and
 ```
 Pages and server actions
         ↓
-repositories (src/lib/data/repositories.ts: 29 typed interfaces)
+repositories (src/lib/data/repositories.ts: 31 typed interfaces)
         ↓
 src/lib/data/index.ts  ← the one switch
    ↓                         ↓
@@ -31,7 +31,8 @@ The adapter in `src/lib/data/http/` is written and unit-tested against a fake se
 | [SHIPPING-RULES-AND-CALCULATIONS.md](SHIPPING-RULES-AND-CALCULATIONS.md) | The shipping calculation |
 | [BACKEND-PENDING-FEATURES.md](BACKEND-PENDING-FEATURES.md) | What only you can make real |
 | [WHITE-LABEL-ARCHITECTURE.md](WHITE-LABEL-ARCHITECTURE.md), [COMPANY-CONFIGURATION.md](COMPANY-CONFIGURATION.md) | One company per deployment, all of it in settings |
-| [CMS-AND-CONTENT-MANAGEMENT.md](CMS-AND-CONTENT-MANAGEMENT.md) | Pages, posts, menus, homepage |
+| [CMS-AND-CONTENT-MANAGEMENT.md](CMS-AND-CONTENT-MANAGEMENT.md) | Pages, posts, menus, homepage, revisions, autosave, reusable blocks |
+| [PRODUCT-CSV.md](PRODUCT-CSV.md) | Product CSV import and export: columns, matching, results |
 | [FRONTEND-ROUTE-MAP.md](FRONTEND-ROUTE-MAP.md) | Every screen, and what it reads |
 | [DEMO-MODE-GUIDE.md](DEMO-MODE-GUIDE.md) | Running the demo to see expected behaviour |
 
@@ -55,7 +56,12 @@ These files have no dependencies and are covered by `npm test`. They define the 
 | Reminder audiences | `src/lib/reminders/segment.ts` | `tests/notifications.test.ts` |
 | Reports | `src/lib/reports/aggregate.ts` | `tests/roles-reports.test.ts` |
 | Capabilities | `src/lib/auth/capabilities.ts` | `tests/roles-reports.test.ts` |
-| HTML allowlist | `src/lib/html/sanitize.ts` | `tests/sanitize-html.test.ts` |
+| HTML allowlist (incl. reusable-block markers) | `src/lib/html/sanitize.ts` | `tests/sanitize-html.test.ts`, `tests/cms-revisions-blocks.test.ts` |
+| Product publishing checks and order limits | `src/lib/validation/product.ts` | `tests/product-quantity.test.ts` |
+| Order money figures (received, outstanding, refund due, credit notes) | `src/lib/orders/money-summary.ts` | `tests/money-summary.test.ts` |
+| Bulk product changes | `src/lib/catalog/bulk.ts` | `tests/product-bulk.test.ts` |
+| Product CSV parsing and import planning | `src/lib/catalog/csv.ts`, `csv-import.ts` | `tests/product-csv.test.ts` |
+| Content revisions and reusable blocks | `src/lib/content/revisions.ts`, `blocks.ts` | `tests/cms-revisions-blocks.test.ts` |
 
 ## Connecting a backend
 
@@ -93,6 +99,9 @@ The adapter works generically, and these specific places will need checking:
 | List filters | Query parameter names come from each repository's query type. See each endpoint |
 | Dates | The mock stamps new records in UTC. "Day" logic in reports and filters must use the store's time zone |
 | Cache | Next.js server rendering calls the API once per request. Nothing is cached, on purpose. Add caching only to public catalog and content, never for customer data |
+| Reusable blocks | Pages store only block markers. The demo expands them in `src/lib/data/expand-blocks.ts` with `blocks.resolve`. Better: expand them in the API when serving a page or post, and keep usage in a table |
+| Autosave | New, never-saved pages and posts autosave in the browser only; existing ones call `contentHistory.autosave` every few seconds while edited. Keep it cheap |
+| Product import | The browser parses the CSV and sends rows (at most 1,000). A large catalog may need a background job instead |
 | Build | With `DATA_SOURCE=http`, a build may call the API for statically rendered pages. Point it at a reachable API or render those pages dynamically |
 
 ## Who owns what

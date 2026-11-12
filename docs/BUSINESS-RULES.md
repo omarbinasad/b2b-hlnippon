@@ -97,19 +97,34 @@ Line total = unit price × quantity, integer arithmetic. Each line resolves at i
 
 ## 3. Quantity rules
 
-Implemented in `pricing/engine.ts` (`resolveQuantityLimits`, `checkQuantity`, `validateQuantityRule`). **Engine.**
+Implemented in `pricing/engine.ts` (`resolveQuantityLimits`, `checkQuantity`, `validateQuantityRule`), product limits checked by `checkOrderQuantity` in `validation/product.ts`. **Engine**, tested in `tests/pricing-engine.test.ts` and `tests/product-quantity.test.ts`.
+
+**Quantity means packages** (bags, cases, cartons: the product's selling unit), never weight. Three 5 kg bags is a quantity of 3. Package weight is a separate field used for shipping (§14) and, for products priced by weight, the delivered-weight adjustment (§7). Nothing forces "sold individually".
+
+**The product's own limits** (`Product.quantityRule`, edited under Inventory → Order quantity):
+
+| Field | Rule |
+| --- | --- |
+| `min` | Whole number ≥ 1. Default 1 |
+| `max` | Empty = no limit. Whole number ≥ 1, not below `min` |
+| `step` | "Order in multiples of". Default 1 (any whole number). `min` and `max` must be multiples of it |
+| Sold individually | Forces min 1, max 1, step 1. Refused together with other limits above 1 |
+
+**Precedence** (`resolveQuantityLimits`):
+
+1. A quantity rule for the **variation**, then for the **product**, overrides the product's own limits. A field the rule leaves empty comes from the product.
+2. The **product's own limits** beat a **category** or **store-wide** rule. A product minimum of 1 counts as "not set", so a category minimum still applies to it; a product maximum, when set, always wins over those rules.
+3. Otherwise the most specific active rule: category > all, then higher priority, then older, then id. Two rules are never merged.
+4. Defaults: at least 1, no maximum.
+5. The step always comes from the product (or 1). Sold individually overrides everything.
 
 | Rule | Detail |
 | --- | --- |
-| Selection | The most specific active rule wins **as a whole**: variation > product > category > all, then higher priority, then older, then id |
-| No merging | A min from one rule never combines with a max from another |
-| Defaults | Rule sets no min = 1. Rule sets no max = none. No rule = min 1, no max |
 | Scope | Per order line. A category rule never sums quantities across products |
-| Pack multiple | `quantityRule.step` on the product (variation overrides). Checked in the cart only, see §4 and §30 |
-| `quantityRule.min/max` | Deprecated. Don't use |
-| Saving | At least one of min or max; integers 1 to 100,000; min ≤ max; name 3 to 120; priority −1000 to 1000 |
+| Messages (`checkQuantity`) | "Order at least N.", "Order at most N.", "Order in multiples of N." |
+| Saving a rule | At least one of min or max; integers 1 to 100,000; min ≤ max; name 3 to 120; priority −1000 to 1000 |
 
-Where limits apply today: cart lines, checkout, admin order creation, adding an order line, and changing a line's quantity on an order (`data/mock-orders.ts`).
+Where limits apply: cart lines, checkout, the product page (minimum, multiple and maximum shown; the quantity input follows them), admin order creation, adding an order line, changing a line's quantity on an order (`data/mock-orders.ts`), and the rule tester. The quantity is never derived from weight, and a fixed-price package's price is never changed by weight; only products marked "priced by weight" are recalculated from the delivered weight (§7).
 
 ---
 
@@ -279,6 +294,28 @@ Implemented in `paymentBalance` in `orders/assemble.ts`, `refundSummary` in `ord
 **Gap.** `recordPayment` refuses once an order is `paid`, and nothing raises `amountPaid`. A positive balance stays on the order, and its `paymentStatus` still reads `paid`. The backend needs a way to record extra payments. Partial payments aren't modelled either. This is a design decision for you and the product owner.
 
 Tested example: paid 4400, a line removed → total 3850, balance −550; overpayment refund 550 → `refundedTotal` 0, `netTotal` 3850, balance 0.
+
+### Money summary (what the order screens show)
+
+`moneySummary(order)` in `src/lib/orders/money-summary.ts` (**Engine**, `tests/money-summary.test.ts`) turns an order into the figures both order screens show (`src/components/order/money-summary.tsx`). Every amount is integer minor units.
+
+| Figure | Meaning |
+| --- | --- |
+| Original total | The total when placed: `adjustments[0].before.orderTotal`, or the current total if never adjusted. Shown only when it differs |
+| Current total | `totals.total`: after staff changes (weights, prices, items), before refunds |
+| Change | Current − original (negative = the order got cheaper) |
+| Collected | `paymentStatus` is `paid`, `partially_refunded` or `refunded`. Choosing a payment method never counts |
+| Kept | If collected: `payment.amountPaid`, else `netTotal`. If not collected: 0 |
+| Received | Kept + every refund (recorded and processed): all money that came in |
+| Refunds recorded | Refunds with status `recorded`: noted on the order (the demo, or a manual refund still to confirm) |
+| Refunds processed | Refunds with status `processed`: confirmed by the payment provider |
+| Owed | `netTotal` = current total − refunds |
+| Outstanding | Collected: max(0, owed − kept). Not collected: owed |
+| Overpaid / Refund due | max(0, kept − owed): received above what the order now costs and not yet returned |
+| Invoice total | The latest invoice or revision total (credit notes excluded). Staff only |
+| Credit notes | Sum of credit notes. **A credit note is paper**: it lowers what's owed but moves no money. Only a refund records money going back. Never treat one as the other |
+
+The customer screen hides the staff-only rows (invoice total, provider notes).
 
 ---
 
@@ -692,8 +729,9 @@ Implemented in `validation/product.ts` (`validateProduct`, `validateCategory`), 
 
 | Rule | Detail |
 | --- | --- |
-| SKU | Unique across products and variations, case-insensitive. Variations also unique within the product, including the parent SKU |
-| Publish | Category required. Price required on a simple product or active variation |
+| SKU | Optional on a draft, required to publish. When given, unique across products and variations, case-insensitive. Variations also unique within the product, including the parent SKU |
+| Draft | May be incomplete: SKU, price, weight, selling unit and stock may be empty (empty weight and stock count as 0). Name, slug and type are always required, and anything filled in must be valid |
+| Publish | Name, type, SKU, selling unit, category, package weight above 0, a valid price on a simple product, stock as a whole number when tracked (a variable product needs its own quantity only when an option shares it), valid order limits (§3). A variable product needs at least one active variation, each with a SKU and price. The same checks run in the editor, on bulk publish and on CSV import (`publishProblems`) |
 | Sale | Below regular. Sale dates need a sale price. End ≥ start |
 | Variable | At least one variation attribute; at least one variation; up to 100; each with a value per attribute; unique combinations |
 | Links | Not self; must exist; up to 20 |
@@ -706,6 +744,38 @@ Implemented in `validation/product.ts` (`validateProduct`, `validateCategory`), 
 **Prices.** Guests and unapproved customers never get prices. Public lists omit them. **Screen rule:** `getBySlug` in the mock returns the whole product including `basePrice` to the server page, and the UI decides what to show. The API must not return it.
 
 **Sanitizing product HTML:** `sanitizeHtml` (no attributes at all), §24.
+
+### Bulk product changes
+
+`planBulkChange` in `src/lib/catalog/bulk.ts` (**Engine**, `tests/product-bulk.test.ts`); `products.bulkChange`. Always previewed first (`apply: false`), then applied.
+
+| Rule | Detail |
+| --- | --- |
+| Size | At most 200 products per request (`BULK_LIMIT`) |
+| Operations | Publish, unpublish (draft), stock status, categories (add, remove, replace), regular price and sale price (set, raise or lower by amount or percent), order limits, archive, delete |
+| Per row | Each product is planned on its own: it changes, or it is skipped with a reason. One bad row never blocks the others |
+| Publish | Runs the publishing checks; a product that can't be published is skipped with its problems |
+| Stock status | Skipped for products that track a quantity ("change the quantity in Inventory instead") |
+| Prices | Set, raise or lower (amount or percent), rounded to the currency's minor unit, half-up; never below 0; a sale price must stay below the regular price (a sale price can also be cleared). A variable product changes on each active option that has the price |
+| Delete | Only for products never used in an order, quotation or cart; others are skipped ("archive it instead") |
+| Capability | `products.edit`; archive and delete need `products.delete` |
+
+### Product CSV import and export
+
+Schema and examples: `docs/PRODUCT-CSV.md`. Rules: `src/lib/catalog/csv.ts`, `csv-import.ts` (**Engine**, `tests/product-csv.test.ts`).
+
+| Rule | Detail |
+| --- | --- |
+| Limits | 1,000 rows, 2 MB per file |
+| Matching | A row with an `ID` updates that product; else a `SKU` that exists updates it; else it creates a new product |
+| Updates | Only cells with a value change. Empty cells keep what's saved |
+| New products | Created as drafts unless the row says `published` and passes the publishing checks |
+| Variations | `Type` = `variation` with a `Parent SKU` (a variable product in the file or the store) |
+| Duplicates | The same SKU or ID twice in one file: the later row is skipped |
+| Problems | A product with any problem is skipped with its variation rows, and the row says why. Other rows still import |
+| Two steps | Check (`apply: false`) shows every row's result; import repeats the checks |
+| Export | The list's filters or the selected ids; chosen columns; product rows followed by their variation rows; a template with example rows. Cells starting with `= + - @` are prefixed with `'` (spreadsheet formula guard) |
+| Capability | Import needs `products.create` and `products.edit`; export needs `products.export` |
 
 ---
 
@@ -745,7 +815,7 @@ Only `approved` passes: price rules, cart, checkout, staff order creation, order
 
 **Staff quick add:** company + phone or email; status `pending` or `approved`; approving at add needs the approve permission.
 
-**Formats** (`customers/contact.ts`): JP phone is domestic `0…` with 10 or 11 digits, or `+81` without the 0. Postcode `NNN-NNNN`, dash optional on input, normalised for storage (`normalizePostcode`). Rules are per store country, with a generic fallback.
+**Formats** (`customers/contact.ts`): JP phone is domestic `0…` with 10 or 11 digits, or `+81` without the 0. Postcode `NNN-NNNN`, dash optional on input, normalised for storage (`normalizePostcode`). Rules are per store country, with a generic fallback. Every postcode input takes its length limit, keyboard and allowed characters from `postcodeInput()` (JP: 8 characters, digits and dash), so no field cuts off a valid postcode.
 
 **Scoping.** Every customer-facing read must be limited to the signed-in customer, and return 404 for others' records (`docs/backend-api.md` §1). In the demo, `getPortalCustomerId` always returns a demo customer.
 
@@ -765,10 +835,12 @@ Implemented in `data/mock-portal.ts`. **Mock, no tests.**
 | Quote | Staff, from `requested` or `quoted` (re-quote allowed). Price every line; valid-until today or later |
 | Decline | Staff, from `requested` or `quoted`. Reason of 3+ characters → `declined` |
 | Reject | Customer, from `quoted` → `rejected` |
-| Accept | Customer, from `quoted`, not expired. Needs a delivery address. Creates an order |
+| Accept | Customer, from `quoted`, not expired. Needs a delivery address and a payment method (below). Creates an order |
 | Expire | A `quoted` quote past `validUntil` becomes `expired` when next read. **No job does this**; the backend can run one or compute it |
 
-**Accepted order:** created through normal order creation, so quantity limits and approval apply. Unit prices are the quoted ones. Shipping is `manual`, amount 0, label "To be confirmed". Payment method is hard-coded `bank_transfer`, regardless of whether it's enabled. Addresses are the customer's defaults. If order creation fails, the quote stays `quoted`.
+**Accepted order:** created through normal order creation, so quantity limits and approval apply. Unit prices are the quoted ones (never re-priced). Shipping is `manual`, amount 0, label "To be confirmed". Addresses are the customer's defaults. If order creation fails, the quote stays `quoted`.
+
+**Payment method on accept:** the customer chooses from the methods checkout offers right now (`payments.checkoutMethods()`: enabled and fully set up). No method is pre-selected or forced. With exactly one method it is used; with several the customer must choose; with none the quote can't be accepted online and the screen says so. A method that isn't available (disabled, not set up, or unknown) is refused. The order is created **unpaid** (waiting for payment): choosing a method never marks it paid.
 
 Quoted prices are checked only as finite and ≥ 0, not with `isValidAmount`. Use `isValidAmount`.
 
@@ -811,6 +883,25 @@ Implemented in `content/rules.ts`, `content/menu.ts`, `html/sanitize.ts` (**Engi
 | Other | Unknown tags dropped, text kept. `h1` → `h2`, `b` → `strong`, `i` → `em`. Comments removed. Output balanced and idempotent |
 
 `tests/cms.test.ts` and `tests/sanitize-html.test.ts` hold attack strings to reuse.
+
+| Reusable block marker | `div` kept only as `<div data-block="blk-…" data-name="…"></div>` (id matching `^blk-[a-z0-9-]{1,40}$`, name escaped, content dropped) or as the render wrapper `<div data-block-kind="announcement|banner|cta|contact|productPromo">`. Any other `div` is dropped, text kept |
+
+### Revisions, autosave and reusable blocks
+
+Rules in `src/lib/content/revisions.ts` and `src/lib/content/blocks.ts` (**Engine**, `tests/cms-revisions-blocks.test.ts`); store in `data/mock-content.ts`. More in `docs/CMS-AND-CONTENT-MANAGEMENT.md`.
+
+| Rule | Detail |
+| --- | --- |
+| Revision kept | On every save of a page or post whose content changed (title, address, body, excerpt, images, SEO, visibility, categories, tags). A status-only change adds none |
+| First history | The first save of an item with no history also keeps the version it replaced ("Original version") |
+| Limit | The newest 25 per item; older ones are deleted. Deleting the item for good deletes its history |
+| Restore | Puts a revision's content back, keeps the item's status and publish date, validates like a save (the address may be taken now), and is recorded as a new revision. Refused for an item in the trash. On a live item the screen asks first |
+| Compare | Field by field, word diff of the text (markers shown as "[Reusable block: name]"); a change in formatting or links only is still reported |
+| Autosave | While editing, at most every 8 seconds when there are unsaved changes. Kept apart from the item: **never changes what visitors see**. Offered back when newer than the last save; saving or discarding removes it. One per user per item (the demo keeps one per item). A new, never-saved item autosaves in the browser only |
+| Live content | Updating a published item, switching it to draft, or restoring a revision on it asks for confirmation first |
+| Block | Name 2 to 80, unique case-insensitive; type one of announcement, banner, call to action, contact, product promotion; content required, at most 50,000 characters, sanitized like page content; block markers removed (no nesting) |
+| Using a block | Pages and posts store only the marker. When shown, each marker becomes the block's current content, so editing a block updates every page using it. A missing block shows nothing |
+| Deleting a block | Refused while any page or post outside the trash uses it; the message names them |
 
 **Terms:** 2 to 40 characters, unique case-insensitive. Renaming updates every post. A category can't be deleted while a live post has only that category.
 

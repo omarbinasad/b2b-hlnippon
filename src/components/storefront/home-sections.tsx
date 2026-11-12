@@ -8,6 +8,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { Icon, type IconName } from "@/components/ui/icons";
 import type { BlogPostSummary, Category, CtaLink, Money, ProductSummary, HeroSlide as HeroSlideContent, HomeSection, BrandFacet } from "@/lib/types";
 import { HeroSlider } from "./hero-slider";
+import { HeroPhoto } from "./hero-photo";
 import { ImageSlot } from "./image-slot";
 
 /* Home page sections (Server Components). Content comes from the admin Homepage screen via repositories.siteContent. */
@@ -49,26 +50,19 @@ export function ArrowLink({ href, children }: { href: string; children: ReactNod
  * Each theme has its own photo; the card is the same in both, slightly see-through so the photo shows behind it like glass.
  * The heading is Poppins, as in the design, unless Company & Branding chooses a heading font. From 1280px the slide keeps the photo's proportions and everything on
  * the card is sized against the slide's width (cqw), so it lines up with the photo at any width. Below that the photo is
- * cropped to its right-hand side and the card sits over the left, or across the bottom on phones.
+ * cropped to its right-hand side and the card sits over the left. On phones the slide is a little wider than tall and
+ * shows the phone photo when there is one; the card sits across the bottom, compact, without the description, and its
+ * two links stay on one row.
  */
 function PhotoHeroSlide({ slide, image, first, pager }: { slide: HeroSlideContent; image: NonNullable<HeroSlideContent["image"]>; first: boolean; /** Room is left at the bottom for the pagination notch. */ pager: boolean }) {
   const Heading = first ? "h1" : "h2";
-  const dark = slide.imageDark;
-  const photo = "object-[82%_center] xl:object-center";
   return (
-    <div className="@container relative isolate min-h-[36rem] sm:min-h-[32rem] xl:aspect-[2089/753] xl:min-h-0">
-      <div className={`absolute inset-0 -z-10 ${dark ? "dark:hidden" : ""}`}>
-        <ImageSlot image={image} sizes="(min-width: 1380px) 1380px, 100vw" original priority={first} placeholder={expectedImageFiles.hero} decorativeAlt="" labelPosition="corner" className="h-full w-full" imageClassName={photo} />
-      </div>
-      {dark && (
-        <div className="absolute inset-0 -z-10 hidden dark:block">
-          <ImageSlot image={dark} sizes="(min-width: 1380px) 1380px, 100vw" original priority={first} placeholder={expectedImageFiles.hero} decorativeAlt="" labelPosition="corner" className="h-full w-full" imageClassName={photo} />
-        </div>
-      )}
+    <div className="@container relative isolate aspect-[10/9] min-h-[18rem] sm:aspect-auto sm:min-h-[32rem] xl:aspect-[2089/753] xl:min-h-0">
+      <HeroPhoto image={image} imageDark={slide.imageDark} imageMobile={slide.imageMobile} imageMobileDark={slide.imageMobileDark} first={first} />
       <div
         className={[
-          "absolute inset-x-3 flex flex-col justify-center border border-hero-glass-line bg-hero-glass p-5 text-hero-glass-ink backdrop-blur-md backdrop-saturate-150 sm:inset-x-auto sm:top-6 sm:left-6 sm:w-[min(36rem,64%)] sm:p-8",
-          pager ? "bottom-12 sm:bottom-12" : "bottom-3 sm:bottom-6",
+          "absolute inset-x-2.5 flex flex-col justify-center border border-hero-glass-line bg-hero-glass p-3.5 text-hero-glass-ink backdrop-blur-md backdrop-saturate-150 sm:inset-x-auto sm:top-6 sm:left-6 sm:w-[min(36rem,64%)] sm:p-8",
+          pager ? "bottom-11 sm:bottom-12" : "bottom-3 sm:bottom-6",
           // A light edge along the top and a soft shadow make it read as glass.
           "shadow-[inset_0_1px_0_rgb(255_255_255/0.7),0_10px_40px_rgb(0_0_0/0.16)]",
           // Same place in both photos: where the larger card was drawn in the designs, so it covers both.
@@ -77,22 +71,22 @@ function PhotoHeroSlide({ slide, image, first, pager }: { slide: HeroSlideConten
       >
         {slide.eyebrow && (
           <div className="flex items-center gap-3 xl:gap-[0.9cqw]">
-            <p className="shrink-0 rounded-full bg-gradient-to-b from-hero-badge-from to-hero-badge-to px-3.5 py-1 text-xs font-bold tracking-wide text-white uppercase shadow-sm sm:text-sm xl:px-[1.1cqw] xl:py-[0.38cqw] xl:text-[1.35cqw] xl:leading-none">{slide.eyebrow}</p>
+            <p className="shrink-0 rounded-full bg-gradient-to-b from-hero-badge-from to-hero-badge-to px-3 py-0.5 text-[0.6875rem] font-bold tracking-wide text-white uppercase shadow-sm sm:px-3.5 sm:py-1 sm:text-sm xl:px-[1.1cqw] xl:py-[0.38cqw] xl:text-[1.35cqw] xl:leading-none">{slide.eyebrow}</p>
             <span aria-hidden="true" className="h-0.5 min-w-6 flex-1 rounded-full bg-hero-badge-to/80" />
           </div>
         )}
-        <Heading className="mt-3 font-[family-name:var(--font-heading,var(--font-poppins))] text-3xl leading-[1.02] font-bold tracking-[-0.02em] sm:text-[2.6rem] xl:mt-[1.5cqw] xl:text-[3.3cqw] xl:leading-[0.98]">{slide.title}</Heading>
-        <p className="mt-3 text-base leading-snug text-hero-glass-muted sm:text-lg xl:mt-[1.1cqw] xl:text-[1.32cqw] xl:leading-[1.32]">{slide.description}</p>
-        <div className="mt-5 flex flex-wrap items-center gap-x-8 gap-y-3 xl:mt-[1.8cqw] xl:flex-col xl:items-start xl:gap-[1cqw]">
+        <Heading className="mt-2 font-[family-name:var(--font-heading,var(--font-poppins))] text-2xl leading-[1.05] sm:mt-3 sm:leading-[1.02] font-bold tracking-[-0.02em] sm:text-[2.6rem] xl:mt-[1.5cqw] xl:text-[3.3cqw] xl:leading-[0.98]">{slide.title}</Heading>
+        <p className="mt-3 hidden leading-snug text-hero-glass-muted sm:block sm:text-lg xl:mt-[1.1cqw] xl:text-[1.32cqw] xl:leading-[1.32]">{slide.description}</p>
+        <div className="mt-3 flex flex-nowrap items-center gap-3 sm:mt-5 sm:flex-wrap sm:gap-x-8 sm:gap-y-3 xl:mt-[1.8cqw] xl:flex-col xl:items-start xl:gap-[1cqw]">
           <Link
             href={slide.cta.href as "/shop"}
-            className="inline-flex h-12 items-center gap-2.5 rounded-xl bg-gradient-to-b from-hero-cta-from to-hero-cta-to px-6 text-base font-semibold text-white shadow-lg shadow-black/20 transition hover:brightness-110 sm:text-lg xl:h-[3.3cqw] xl:gap-[0.9cqw] xl:rounded-[0.75cqw] xl:px-[1.9cqw] xl:text-[1.5cqw]"
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-b from-hero-cta-from to-hero-cta-to px-3.5 text-[0.8125rem] font-semibold whitespace-nowrap text-white sm:h-12 sm:gap-2.5 sm:px-6 shadow-lg shadow-black/20 transition hover:brightness-110 sm:text-lg xl:h-[3.3cqw] xl:gap-[0.9cqw] xl:rounded-[0.75cqw] xl:px-[1.9cqw] xl:text-[1.5cqw]"
           >
             {slide.cta.label}
-            <Icon name="arrowRight" className="size-5 xl:size-[1.5cqw]" />
+            <Icon name="arrowRight" className="size-4 sm:size-5 xl:size-[1.5cqw]" />
           </Link>
           {slide.secondaryCta?.label && (
-            <Link href={slide.secondaryCta.href as "/shop"} className="border-b-2 border-current pb-0.5 text-base font-semibold hover:opacity-80 sm:text-lg xl:text-[1.36cqw] xl:leading-tight">
+            <Link href={slide.secondaryCta.href as "/shop"} className="min-w-0 text-[0.8125rem] leading-tight font-semibold underline decoration-2 underline-offset-4 hover:opacity-80 sm:border-b-2 sm:border-current sm:pb-0.5 sm:text-lg sm:no-underline xl:text-[1.36cqw] xl:leading-tight">
               {slide.secondaryCta.label}
             </Link>
           )}

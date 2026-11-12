@@ -54,9 +54,17 @@ export function InventorySection({ draft, update, errors, storeThreshold }: Sect
           <TextField path="unitOfMeasure" label="Unit of measurement" errors={errors} maxLength={50} value={draft.unitOfMeasure} onChange={(unitOfMeasure) => update({ unitOfMeasure })} />
         </div>
       </fieldset>
-      <p className="text-xs text-muted">
-        Minimum/maximum order quantities and increments will be managed by the Rules module (not part of this form).
-      </p>
+      <fieldset className="rounded-ui border border-line p-3">
+        <legend className="px-1 text-sm font-medium">Order quantity</legend>
+        <p className="mb-3 text-xs text-muted">
+          Counted in {draft.unitLabel.trim() || "units"} (packages, bags, cases), never in weight. Three 5 kg bags is a quantity of 3. Quantity rules can override these for a customer, group or category.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <TextField path="minQuantity" label="Minimum per order" errors={errors} inputMode="numeric" value={draft.minQuantity} onChange={(minQuantity) => update({ minQuantity })} />
+          <TextField path="maxQuantity" label="Maximum per order" errors={errors} inputMode="numeric" placeholder="No limit" value={draft.maxQuantity} onChange={(maxQuantity) => update({ maxQuantity })} />
+          <TextField path="quantityStep" label="Order in multiples of" errors={errors} inputMode="numeric" hint="Optional. 1 = any number." value={draft.quantityStep} onChange={(quantityStep) => update({ quantityStep })} />
+        </div>
+      </fieldset>
     </Section>
   );
 }

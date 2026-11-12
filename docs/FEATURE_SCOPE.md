@@ -40,20 +40,22 @@ Product origin (e.g. Japan) is a product attribute, separate from the store loca
 | Sale price and sale dates | WC | Interactive demo (product + variation) | Yes (applying the schedule) |
 | Inventory: track stock, quantity / status, backorders, low-stock threshold (store-wide default shown), sold individually | WC | Interactive demo (variations: same as product, own quantity or own status) | Yes |
 | Variation bulk actions (set price/sale/stock, enable/disable all, delete all, expand/collapse) | WC | Interactive demo | Yes |
+| Bulk product changes from the product list (publish, draft, stock status, categories, prices, order limits, archive, delete) with a preview | WC | Interactive demo: per-row skip reasons, at most 200 at once | Yes |
+| Publishing checks (drafts may be incomplete) | WC | Interactive demo: the same checks in the editor, bulk publish and CSV import | Yes |
 | Enabled variation without a price | WC | Warning in the editor and list; publishing blocked | Yes |
 | Visibility, status (draft/published/archived), featured | WC | Interactive demo; public list respects status and visibility | Yes |
 | Upsells and cross-sells | WC | Interactive demo (server-side product search picker) | Yes |
 | Purchase note, display order, reviews toggle | WC | Interactive demo (stored; reviews feature itself not built) | Yes |
 | Legacy WooCommerce IDs, "initial number in stock", "unit of measurement" | WC (migration) | Typed optional fields; the last two edited in Inventory (as on the old store); no logic | Yes (migration) |
 | Rich-text description, scheduled publishing, private/password visibility, SEO fields, virtual/downloadable | WC / plugins | — (deferred) | Yes |
-| Per-product min / max / increment | Plugin? | Min/max moved to quantity rules (§3); increment (`step`) stays a product setting | Yes |
+| Per-product min / max / increment | Plugin? | Interactive demo: product's own minimum, maximum and multiple in packages (Inventory → Order quantity); variation and product rules override them, they beat category and store-wide rules (BUSINESS-RULES §3); shown and enforced on the product page, cart, checkout and admin orders | Yes |
 | Product preview | New | Interactive demo (approved-customer view) | No |
 | Admin add / edit / duplicate / archive products | WC | Interactive demo — in-memory mock store (survives refresh and navigation, lost on restart) | Yes |
 | Category management (name, slug, parent, description, image, status) + product assignment | WC | Interactive demo — same in-memory store | Yes |
 | Brand / tag / attribute / shipping-class management screens | WC | — (selectors use seeded lists) | Yes |
 | Search, filter, pagination | WC | Interactive demo (shop: search from the header with a removable search chip, sort, left filter bar: customer-only price range slider (approved customers, server-side), availability, category tree (expandable subcategories), brands with counts; active-filter chips; admin: search incl. variation SKU, category tree, type, stock, status) | Yes |
 | Sorting | WC | Interactive demo (shop sort select; admin column sorting) | Yes |
-| Import existing products and images | New (migration) | Not used at runtime: the old import is archived in `scripts/legacy/`; the catalog is the standalone sample data | Yes (migration) |
+| Import existing products and images | New (migration) | Product CSV import and export: interactive demo (map columns, check every row, import, per-row results; export by filters or selection, chosen columns, template). See docs/PRODUCT-CSV.md. The old WooCommerce import stays archived in `scripts/legacy/` | Yes |
 
 ## 2. B2B accounts and permissions
 
@@ -76,7 +78,7 @@ Product origin (e.g. Japan) is a product attribute, separate from the store loca
 | Customer-specific and group pricing | Plugin? | Interactive demo: create, edit, enable/disable; audience = one customer, a group or all approved customers | Yes (**enforcement at cart/checkout**) |
 | Fixed price, amount-off and percentage-off by customer / group / all × variation / product / category / all | Plugin? | Interactive demo; negative prices rejected | Yes |
 | Bulk / tier pricing | Plugin? | Interactive demo: up to 10 non-overlapping tiers per rule with live preview | Yes |
-| Product / variation min / max per line | Plugin? | Interactive demo (quantity rules); product page shows the effective limit | Yes |
+| Product / variation min / max per line | Plugin? | Interactive demo (quantity rules plus each product's own limits); product page shows the effective limit | Yes |
 | Global and category min / max per line | Plugin? | Interactive demo; applies to each product line, not the category total | Yes |
 | Cart-level rules (e.g. minimum order value) | Plugin? | — | Yes |
 | **Rule precedence** | — | **Decided** (docs/backend-api.md §6.1–6.2): customer > group > all; then variation > product > category > all; then priority; then older rule (flagged as conflict). One rule per line, no stacking. Rules use the regular price (fixed rules their own amount); the customer pays the lower of the rule price and the active sale price — compared, never combined. Pure engine + tests in `src/lib/pricing/engine.ts` | Yes (same rules) |
@@ -111,6 +113,7 @@ Product origin (e.g. Japan) is a product attribute, separate from the store loca
 | Admin adjusts item quantity / fulfilled weight / agreed price | Plugin? | Interactive demo with reason, before/after preview and change history; quantity until delivery (ordered weight follows, quantity rules enforced) | Yes |
 | Admin edits order items: add, remove, replace | Plugin? / New | Interactive demo: customer price re-quoted by quantity (editable), server-side preview, reason, change history; allowed while received / preparing / on the way; last item can't be removed | Yes |
 | Order discount (fixed or %), delivery date edit | New | Interactive demo: discount after line discounts and before tax, split over lines for tax; inline delivery date; both in the change history | Yes |
+| Money summary on order pages (received, outstanding, overpaid, refund due, invoice total, credit notes kept apart) | New | Interactive demo on admin and customer order pages | Yes |
 | Balance after editing a paid order | New | Interactive demo: amount already paid kept on first edit; balance due / overpaid shown to admin and customer; nothing charged or refunded | Yes (payment/refund module) |
 | Stock from the order page | New | Interactive demo: live stock per line, warning for items now out of stock/unavailable, mark in/out of stock or set counted quantity (global catalog change; orders unchanged) | Yes |
 
@@ -157,7 +160,7 @@ Product origin (e.g. Japan) is a product attribute, separate from the store loca
 | Quick order | Plugin? | Interactive demo (`/account/quick-order`): every published product, one row per orderable option; name/SKU (incl. variation SKU) search, category filter, Load more (server-side pages of 20 products); customer prices at the minimum quantity, stock, quantity rules; qty steppers, per-row Add and Add selected to cart (selection kept across searches). Prices only for approved customers | Yes |
 | Reorder | WC | — | Yes |
 | Profile, addresses, notifications | WC / New | Read-only demo | Yes |
-| Quotes, saved lists, CSV order upload | New | Planned; behaviour not yet specified | Yes |
+| Quotes, saved lists, CSV order upload | New | Quotes and saved lists: interactive demo; accepting a quote lets the customer choose an enabled payment method and creates an unpaid order at the quoted prices. CSV order upload: not built | Yes |
 
 ## 8. Delivery reminders
 

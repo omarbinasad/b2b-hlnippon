@@ -5,8 +5,13 @@ import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { savePageAction, savePostAction, type ContentActionResult } from "@/app/admin/content-actions";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { autosaveContentAction, discardAutosaveAction, savePageAction, savePostAction, type ContentActionResult } from "@/app/admin/content-actions";
+import { useViewOnly } from "@/components/admin/capabilities-context";
+import { useUnsavedGuard } from "@/components/admin/use-unsaved-guard";
+import { Dialog } from "@/components/ui/dialog";
+import { Notice } from "@/components/ui/feedback";
+import { formatDateTime } from "@/lib/format";
 import { MediaPicker } from "@/components/admin/media/media-picker";
 import { TermPicker } from "./term-manager";
 import { Button } from "@/components/ui/button";
@@ -15,7 +20,7 @@ import { Skeleton } from "@/components/ui/feedback";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { siteConfig } from "@/config/site";
 import { slugify } from "@/lib/content/rules";
-import type { BlogPost, ContentPage, ContentStatus, FieldErrors, PageVisibility, ProductImage, SeoFields } from "@/lib/types";
+import type { BlogPost, ContentAutosave, ContentPage, ContentSnapshot, ContentStatus, FieldErrors, PageVisibility, ProductImage, SeoFields } from "@/lib/types";
 
 // Only admin editing screens load the editor library.
 const RichEditor = dynamic(() => import("./rich-editor"), { ssr: false, loading: () => <Skeleton className="h-80 w-full" /> });
@@ -31,8 +36,49 @@ function toLocalInput(iso?: string) {
 }
 const fromLocalInput = (v: string) => (v ? `${v}:00${siteConfig.utcOffset}` : undefined);
 
-export function ContentForm({ kind, item, categories = [], tagOptions = [] }: { kind: Kind; item?: ContentPage | BlogPost; categories?: string[]; tagOptions?: string[] }) {
+/** How often unsaved work is kept while someone types. */
+const AUTOSAVE_MS = 8000;
+/** A new, never-saved item autosaves in this browser only (it has no id on the server yet). */
+const localKey = (kind: Kind) => `cms-autosave:${kind}:new`;
+const readLocal = (kind: Kind): { savedAt: string; snapshot: ContentSnapshot } | null => {
+  try {
+    const raw = localStorage.getItem(localKey(kind));
+    const v = raw ? JSON.parse(raw) : null;
+    return v && typeof v.savedAt === "string" && v.snapshot && typeof v.snapshot.title === "string" ? v : null;
+  } catch {
+    return null;
+  }
+};
+const clearLocal = (kind: Kind) => {
+  try {
+    localStorage.removeItem(localKey(kind));
+  } catch {}
+};
+const timeOnly = (iso: string) => new Intl.DateTimeFormat(undefined, { timeZone: siteConfig.timeZone, hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+
+type AutoState = { state: "idle" | "saving" | "server" | "local" | "error"; at?: string; message?: string };
+
+export function ContentForm({
+  kind,
+  item,
+  categories = [],
+  tagOptions = [],
+  autosave,
+  revisionCount = 0,
+  restored = false,
+}: {
+  kind: Kind;
+  item?: ContentPage | BlogPost;
+  categories?: string[];
+  tagOptions?: string[];
+  /** Server autosave newer than the saved version, offered back. */
+  autosave?: ContentAutosave | null;
+  revisionCount?: number;
+  /** Just restored from a revision. */
+  restored?: boolean;
+}) {
   const router = useRouter();
+  const viewOnly = useViewOnly();
   const post = kind === "post" ? (item as BlogPost | undefined) : undefined;
   const page = kind === "page" ? (item as ContentPage | undefined) : undefined;
   const [title, setTitle] = useState(item?.title ?? "");
@@ -51,13 +97,101 @@ export function ContentForm({ kind, item, categories = [], tagOptions = [] }: { 
   const [message, setMessage] = useState("");
   const [picking, setPicking] = useState<"featured" | "og" | null>(null);
   const [pending, startTransition] = useTransition();
+  const [editorKey, setEditorKey] = useState(0);
+  const [recover, setRecover] = useState<{ savedAt: string; by?: string; snapshot: ContentSnapshot; where: "server" | "local" } | null>(autosave ? { savedAt: autosave.savedAt, by: autosave.authorName, snapshot: autosave.snapshot, where: "server" } : null);
+  const [auto, setAuto] = useState<AutoState>({ state: "idle" });
+  const [confirm, setConfirm] = useState<{ next: ContentStatus; then?: "preview" } | null>(null);
   const p = `${kind}-form`;
+
+  const snapshot: ContentSnapshot = { title, slug, excerpt, bodyHtml, image, seo, ...(kind === "page" ? { visibility } : { categories: cats, tags }) };
+  const snapJson = JSON.stringify(snapshot);
+  const [savedJson, setSavedJson] = useState(snapJson);
+  const dirty = !viewOnly && snapJson !== savedJson;
+  const guard = useUnsavedGuard(dirty);
+
+  // Autosave: at most every AUTOSAVE_MS while there are unsaved changes. Never touches the saved item.
+  const latest = useRef({ snapJson, snapshot });
+  useEffect(() => {
+    latest.current = { snapJson, snapshot };
+  });
+  const lastAuto = useRef(snapJson);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!dirty || timer.current || snapJson === lastAuto.current) return;
+    timer.current = setTimeout(async () => {
+      timer.current = null;
+      const { snapJson: json, snapshot: snap } = latest.current;
+      if (json === lastAuto.current) return;
+      lastAuto.current = json;
+      if (!item) {
+        try {
+          const at = new Date().toISOString();
+          localStorage.setItem(localKey(kind), JSON.stringify({ savedAt: at, snapshot: snap }));
+          setAuto({ state: "local", at });
+        } catch {
+          setAuto({ state: "error", message: "This browser couldn't keep a copy. Save a draft to be safe." });
+        }
+        return;
+      }
+      setAuto({ state: "saving" });
+      const r = await autosaveContentAction(kind, item.id, snap);
+      setAuto(r.ok ? { state: "server", at: r.savedAt } : { state: "error", message: r.message });
+    }, AUTOSAVE_MS);
+  }, [dirty, snapJson, item, kind]);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  // A new item: offer back what this browser kept last time.
+  useEffect(() => {
+    if (item) return;
+    const local = readLocal(kind);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- browser storage is only readable after mounting
+    if (local && (local.snapshot.title.trim() || local.snapshot.bodyHtml.trim())) setRecover({ ...local, where: "local" });
+  }, [item, kind]);
+
+  const applySnapshot = (s: ContentSnapshot) => {
+    setTitle(s.title);
+    setSlug(s.slug);
+    setSlugEdited(true);
+    setExcerpt(s.excerpt);
+    setBodyHtml(s.bodyHtml);
+    setImage(s.image);
+    setSeo(s.seo ?? {});
+    if (kind === "page") setVisibility(s.visibility === "customers" ? "customers" : "public");
+    else {
+      setCats(s.categories ?? []);
+      setTags(s.tags ?? []);
+    }
+    setEditorKey((k) => k + 1);
+  };
+  const restoreAutosave = () => {
+    if (!recover) return;
+    applySnapshot(recover.snapshot);
+    setRecover(null);
+    setMessage("Autosaved changes restored. Save to keep them.");
+  };
+  const discardAutosave = () => {
+    if (!recover) return;
+    if (recover.where === "local") clearLocal(kind);
+    else if (item) void discardAutosaveAction(kind, item.id);
+    setRecover(null);
+  };
   const base = kind === "page" ? "/admin/pages" : "/admin/posts";
   const publicPath = kind === "page" ? `/${slug}` : `/blog/${slug}`;
 
-  const save = (next: ContentStatus, then?: "preview") =>
+  /** Saving a live item changes what visitors see (or takes it off the site), so it asks first. */
+  const save = (next: ContentStatus, then?: "preview") => {
+    if (item && status === "published" && !confirm) {
+      setConfirm({ next, then });
+      return;
+    }
+    setConfirm(null);
+    doSave(next, then);
+  };
+
+  const doSave = (next: ContentStatus, then?: "preview") =>
     startTransition(async () => {
       const payload = { title, slug, excerpt, bodyHtml, status: next, publishedAt: next === "scheduled" ? fromLocalInput(when) : item?.publishedAt, image, seo, visibility, categories: cats, tags };
+      const sentJson = snapJson;
       const r: ContentActionResult = kind === "page" ? await savePageAction(item?.id ?? null, payload) : await savePostAction(item?.id ?? null, payload);
       if (!r.ok) {
         setErrors(r.errors);
@@ -65,10 +199,17 @@ export function ContentForm({ kind, item, categories = [], tagOptions = [] }: { 
         return;
       }
       setErrors({});
+      setSavedJson(sentJson);
+      lastAuto.current = sentJson;
+      if (!item) clearLocal(kind);
+      setAuto({ state: "idle" });
+      setRecover(null);
       setStatus(next);
       setMessage(next === "published" ? "Published." : next === "scheduled" ? "Scheduled." : "Draft saved.");
       if (then === "preview") window.open(`/preview/${kind}/${r.value.id}`, "_blank", "noopener");
       if (!item) router.replace(`${base}/${r.value.id}` as Route);
+      // After a restore, drop "?restored=1" so the notice doesn't linger.
+      else if (restored) router.replace(`${base}/${item.id}` as Route);
       else router.refresh();
     });
 
@@ -77,8 +218,34 @@ export function ContentForm({ kind, item, categories = [], tagOptions = [] }: { 
   const ogImage = seo.ogImage || image?.src;
   const live = item && status === "published";
 
+  const autoText =
+    auto.state === "saving" ? "Autosaving…"
+    : auto.state === "server" && auto.at ? `Unsaved changes autosaved at ${timeOnly(auto.at)}. Visitors don't see them until you save.`
+    : auto.state === "local" && auto.at ? `Unsaved changes kept in this browser at ${timeOnly(auto.at)}.`
+    : auto.state === "error" ? auto.message
+    : dirty ? "Unsaved changes."
+    : item ? "All changes saved." : "";
+
   return (
     <form noValidate onSubmit={(e) => e.preventDefault()} className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+      {(recover || restored) && (
+        <div className="space-y-3 xl:col-span-2">
+          {restored && <Notice tone="success" title="Version restored">The content now matches the version you chose. The replaced content is in Revisions.</Notice>}
+          {recover && (
+            <Notice tone="warning" title={recover.where === "server" ? "There are newer unsaved changes" : "An unsaved draft was found"}>
+              <p>
+                {recover.where === "server"
+                  ? `Autosave kept changes from ${formatDateTime(recover.savedAt)}${recover.by ? ` by ${recover.by}` : ""} that are newer than the saved version.`
+                  : `This browser kept a draft from ${formatDateTime(recover.savedAt)}${recover.snapshot.title ? `: “${recover.snapshot.title}”` : ""}.`}
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button size="sm" onClick={restoreAutosave}>Restore those changes</Button>
+                <Button size="sm" variant="ghost" onClick={discardAutosave}>Discard them</Button>
+              </div>
+            </Notice>
+          )}
+        </div>
+      )}
       <div className="min-w-0 space-y-6">
         <Card>
           <div className="space-y-4">
@@ -99,7 +266,7 @@ export function ContentForm({ kind, item, categories = [], tagOptions = [] }: { 
             </Field>
             <div>
               <p className="mb-1.5 text-sm font-medium">Content</p>
-              <RichEditor id={`${p}-body`} value={bodyHtml} onChange={setBodyHtml} invalid={Boolean(errors.bodyHtml)} describedBy={errors.bodyHtml ? `${p}-body-error` : undefined} />
+              <RichEditor key={editorKey} blocks id={`${p}-body`} value={bodyHtml} onChange={setBodyHtml} invalid={Boolean(errors.bodyHtml)} describedBy={errors.bodyHtml ? `${p}-body-error` : undefined} />
               {errors.bodyHtml && <p id={`${p}-body-error`} className="mt-1 text-sm text-danger">{errors.bodyHtml}</p>}
             </div>
             <Field id={`${p}-excerpt`} label="Excerpt" error={errors.excerpt} hint="Short summary for cards and search results.">
@@ -164,6 +331,12 @@ export function ContentForm({ kind, item, categories = [], tagOptions = [] }: { 
             {live && <Link href={publicPath as Route} target="_blank" className="text-center text-sm font-medium text-brand hover:underline">View live page</Link>}
           </div>
           <p role="status" className={Object.keys(errors).length ? "mt-3 text-sm text-danger" : "mt-3 text-sm text-muted"}>{message}</p>
+          {!viewOnly && <p aria-live="polite" data-autosave={auto.state} className={auto.state === "error" ? "mt-2 text-xs text-danger" : "mt-2 text-xs text-muted"}>{autoText}</p>}
+          {item && (
+            <Link href={`${base}/${item.id}/revisions` as Route} className="mt-3 inline-block text-sm font-medium text-brand hover:underline">
+              Revisions ({revisionCount})
+            </Link>
+          )}
         </Card>
 
         {kind === "page" && (
@@ -206,6 +379,24 @@ export function ContentForm({ kind, item, categories = [], tagOptions = [] }: { 
           }}
         />
       </aside>
+      <Dialog
+        open={confirm !== null}
+        onClose={() => setConfirm(null)}
+        title={confirm?.next === "draft" ? `Take this ${kind} off the site?` : confirm?.next === "scheduled" ? `Reschedule this live ${kind}?` : `Update the live ${kind}?`}
+        description={confirm?.next === "draft"
+          ? `Switching to draft hides it from visitors until you publish it again.`
+          : confirm?.next === "scheduled"
+            ? `Visitors won't see it until the scheduled time. The current version is kept in Revisions.`
+            : `Visitors see your changes straight away. The current version is kept in Revisions, so you can go back.`}
+      >
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="secondary" onClick={() => setConfirm(null)}>Keep editing</Button>
+          <Button variant={confirm?.next === "draft" ? "danger" : "primary"} onClick={() => { const c = confirm; setConfirm(null); if (c) doSave(c.next, c.then); }}>
+            {confirm?.next === "draft" ? "Switch to draft" : confirm?.next === "scheduled" ? "Schedule" : confirm?.then === "preview" ? "Update and preview" : "Update live"}
+          </Button>
+        </div>
+      </Dialog>
+      {guard.dialog}
     </form>
   );
 }
