@@ -5,6 +5,7 @@ import { AddToCart } from "@/components/product/add-to-cart";
 import { ProductGallery } from "@/components/product/product-gallery";
 import { StockBadge } from "@/components/ui/badge";
 import { ButtonLink } from "@/components/ui/button";
+import { Icon, type IconName } from "@/components/ui/icons";
 import { countryName, formatMoney, formatWeight } from "@/lib/format";
 import { Notice } from "@/components/ui/feedback";
 import { RichText } from "@/components/ui/rich-text";
@@ -32,6 +33,7 @@ export default async function ProductPage({ params }: PageProps<"/shop/[slug]">)
   const staffPrices = viewer?.kind === "admin" ? await repositories.orders.orderableProduct(product.id, STANDARD_PRICING_ID) : null;
   const orderable = customerId ? await repositories.orders.orderableProduct(product.id, customerId) : null;
   const brands = product.brandIds.length ? (await repositories.catalogSettings.brands()).filter((b) => product.brandIds.includes(b.id)) : [];
+  const badges = ((await repositories.siteContent.get()).productBadges ?? []).filter((b) => b.label.trim()).slice(0, 6);
   const activeOptions = product.variations.filter((v) => v.status === "active");
   const min = limits?.min ?? 1;
   const step = limits?.step ?? rule.step;
@@ -128,6 +130,18 @@ export default async function ProductPage({ params }: PageProps<"/shop/[slug]">)
               <Link href="/login" className="font-medium underline">Log in</Link> or{" "}
               <Link href="/register" className="font-medium underline">apply for an account</Link>.
             </Notice>
+          )}
+
+          {/* Store promises from Homepage → Product page badges (the same for every product). */}
+          {badges.length > 0 && (
+            <ul aria-label="Why buy from us" className="grid grid-cols-2 gap-y-4 rounded-ui border border-line px-2 py-4 sm:grid-cols-4 md:grid-cols-2 lg:grid-cols-4">
+              {badges.map((b, i) => (
+                <li key={`${i}-${b.label}`} className="flex flex-col items-center gap-1.5 px-1 text-center text-xs font-medium sm:text-sm">
+                  <Icon name={b.icon as IconName} className="size-6 text-muted" />
+                  {b.label}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </div>

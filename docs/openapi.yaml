@@ -16895,6 +16895,17 @@
             - "title"
             - "text"
             - "cta"
+    "IconLabel":
+      "description": "A small icon and label, such as \"Safe shipping\"."
+      "type": "object"
+      "properties":
+        "icon":
+          "type": "string"
+        "label":
+          "type": "string"
+      "required":
+        - "icon"
+        - "label"
     "IconText":
       "type": "object"
       "properties":
@@ -21395,6 +21406,11 @@
             "$ref": "#/components/schemas/HomeSection"
         "about":
           "$ref": "#/components/schemas/AboutContent"
+        "productBadges":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/IconLabel"
+          "description": "Badges under Add to cart on every product page (at most 6). Empty or missing hides the row."
         "updatedAt":
           "type": "string"
       "required":
@@ -21413,6 +21429,11 @@
             "$ref": "#/components/schemas/HomeSection"
         "about":
           "$ref": "#/components/schemas/AboutContent"
+        "productBadges":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/IconLabel"
+          "description": "Badges under Add to cart on every product page (at most 6). Empty or missing hides the row."
       "required":
         - "topBar"
         - "sections"

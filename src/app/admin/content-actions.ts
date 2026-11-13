@@ -205,7 +205,11 @@ export async function saveSiteContentAction(raw: unknown): Promise<ContentAction
   const known = new Map(current.sections.map((s) => [s.id, s.type]));
   const sections = Array.isArray(v.sections) ? v.sections.filter((s) => known.get(obj(s).id as string) === obj(s).type) : [];
   if (sections.length !== current.sections.length) return { ok: false, errors: {}, message: "The page was out of date. Reload and try again." };
-  const r = await repositories.siteContent.update({ topBar: str(v.topBar, 200), sections, about: v.about ?? current.about }, by);
+  // Badges: only icon and label, trimmed; the repository checks the count and lengths.
+  const productBadges = Array.isArray(v.productBadges)
+    ? v.productBadges.slice(0, 20).map((b) => ({ icon: str(obj(b).icon, 40), label: str(obj(b).label, 80) }))
+    : current.productBadges;
+  const r = await repositories.siteContent.update({ topBar: str(v.topBar, 200), sections, about: v.about ?? current.about, productBadges }, by);
   if (!r.ok) return { ok: false, errors: r.errors, message: r.message ?? "Some fields need attention." };
   refresh();
   return { ok: true, value: { id: "site" } };

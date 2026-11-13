@@ -10,6 +10,7 @@ import { Card } from "@/components/ui/card";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { cx } from "@/lib/cx";
+import { PRODUCT_BADGE_LIMIT } from "@/lib/validation/site-content";
 import type { AboutContent, CtaLink, FieldErrors, HeroSlide, HomeSection, HomeSectionType, IconText, SiteContent } from "@/lib/types";
 
 const SECTION_NAMES: Record<HomeSectionType, string> = {
@@ -27,7 +28,7 @@ const SECTION_NAMES: Record<HomeSectionType, string> = {
   contact: "Contact call to action",
 };
 
-const ICONS: IconName[] = ["file", "users", "shieldCheck", "coins", "truck", "truckFast", "headset", "receipt", "repeat", "box", "store", "cart", "sparkles", "wheat", "meat", "fish", "apple", "pot", "flame", "cookie", "cupSoda", "nut", "globe", "gift", "percent", "target", "eye", "users", "user", "tag", "clock", "calendar", "phone", "mail", "mapPin"];
+const ICONS: IconName[] = ["file", "users", "shieldCheck", "award", "coins", "truck", "truckFast", "headset", "receipt", "repeat", "box", "store", "cart", "sparkles", "wheat", "meat", "fish", "apple", "pot", "flame", "cookie", "cupSoda", "nut", "globe", "gift", "percent", "target", "eye", "users", "user", "tag", "clock", "calendar", "phone", "mail", "mapPin"];
 
 function Text({ id, label, value, onChange, error, area, hint }: { id: string; label: string; value: string; onChange: (v: string) => void; error?: string; area?: boolean; hint?: string }) {
   return (
@@ -309,6 +310,7 @@ export function HomepageBuilder({ content }: { content: SiteContent }) {
   const [topBar, setTopBar] = useState(content.topBar);
   const [sections, setSections] = useState(content.sections);
   const [about, setAbout] = useState(content.about);
+  const [badges, setBadges] = useState(content.productBadges ?? []);
   const [open, setOpen] = useState<string | null>(null);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [message, setMessage] = useState("");
@@ -325,7 +327,7 @@ export function HomepageBuilder({ content }: { content: SiteContent }) {
   };
   const save = () =>
     start(async () => {
-      const r = await saveSiteContentAction({ topBar, sections, about });
+      const r = await saveSiteContentAction({ topBar, sections, about, productBadges: badges });
       if (!r.ok) {
         setErrors(r.errors);
         setMessage(r.message);
@@ -342,6 +344,24 @@ export function HomepageBuilder({ content }: { content: SiteContent }) {
     <form noValidate onSubmit={(e) => e.preventDefault()} className="space-y-6">
       <Card title="Top bar">
         <Text id="home-topbar" label="Message above the header" value={topBar} error={errors.topBar} onChange={setTopBar} />
+      </Card>
+
+      <Card title="Product page badges" description={`Small icons with a short label under Add to cart on every product page, up to ${PRODUCT_BADGE_LIMIT}. Remove them all to hide the row.`}>
+        <div className="space-y-3">
+          {errors.productBadges && <p className="text-sm text-danger">{errors.productBadges}</p>}
+          <ItemList
+            items={badges}
+            onChange={setBadges}
+            addLabel="Add badge"
+            blank={{ icon: "shieldCheck", label: "" }}
+            render={(b, setB, i) => (
+              <div className="grid gap-3 sm:grid-cols-[10rem_minmax(0,1fr)]">
+                <IconSelect id={`badge-${i}-icon`} value={b.icon} onChange={(icon) => setB({ ...b, icon })} />
+                <Text id={`badge-${i}-label`} label="Text" value={b.label} error={errors[`productBadges.${i}.label`]} onChange={(label) => setB({ ...b, label })} />
+              </div>
+            )}
+          />
+        </div>
       </Card>
 
       <Card title="Homepage sections" description="Drag or use the arrows to reorder. Turn a section off to hide it without losing its content.">

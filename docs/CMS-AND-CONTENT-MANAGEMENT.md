@@ -98,7 +98,7 @@ A menu is a tree of up to 3 levels. An item links to a page (by id, follows rena
 
 ## Homepage and About content
 
-`SiteContent` is a single JSON document: a top bar, an ordered list of typed sections, and the About page. The backend can store it as one JSON column. Section ids and types are fixed by the frontend; the server action refuses unknown ones. Order and `enabled` are per section. Rules are in `src/lib/validation/site-content.ts`. Links must be `http(s)`, site-relative or `#`.
+`SiteContent` is a single JSON document: a top bar, an ordered list of typed sections, the About page, and the product page badges (`productBadges`: up to 6 icon + label pairs shown under Add to cart on every product page, edited on the Homepage screen; an empty list hides the row). The backend can store it as one JSON column. Section ids and types are fixed by the frontend; the server action refuses unknown ones. Order and `enabled` are per section. Rules are in `src/lib/validation/site-content.ts`. Links must be `http(s)`, site-relative or `#`.
 
 ## Other endpoints to implement
 

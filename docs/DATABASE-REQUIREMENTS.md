@@ -763,7 +763,7 @@ Usage isn't stored: pages and posts hold markers (`<div data-block="blk-…" dat
 
 **Navigation menus** (`NavigationMenu`): `id`, `name` (2+), `location` enum(header, footer, none), `updatedAt`. **One menu per header or footer location**; taking a location moves the other menu to `none`. Items (`MenuItem`), a tree up to 3 levels, ordered: `id`, `label` (1 to 60), `kind` enum(page, category, custom), `ref` (page id or category slug), `url` (custom only; `http(s)`, `mailto`, `tel`, site-relative or `#`). Storing the tree as json in the menu is acceptable.
 
-**Site content** (`SiteContent`), single json document: `topBar` (up to 120), `sections` (ordered typed `HomeSection` list; ids unique), `about`, `updatedAt`. `docs/CMS-AND-CONTENT-MANAGEMENT.md` says one json column works. Validation: `validation/site-content.ts`.
+**Site content** (`SiteContent`), single json document: `topBar` (up to 120), `sections` (ordered typed `HomeSection` list; ids unique), `about`, `productBadges` (optional list of `{icon, label}`, at most 6, label 1 to 40 characters; shown under Add to cart on every product page), `updatedAt`. `docs/CMS-AND-CONTENT-MANAGEMENT.md` says one json column works. Validation: `validation/site-content.ts`.
 
 **Contact messages** (`ContactMessage`): `id`, `name` (2 to 120), `company` (opt, up to 200), `email` (required, up to 200), `phone` (opt), `topic` enum(general, products, account, orders, other), `message` (10 to 2000), `receivedAt`.
 

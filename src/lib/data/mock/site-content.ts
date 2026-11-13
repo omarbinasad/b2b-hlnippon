@@ -45,6 +45,12 @@ export const HERO_SLIDES: HeroSlide[] = [
 export const seedSiteContent: SiteContent = {
   topBar: "Wholesale halal groceries for businesses across Japan",
   updatedAt: AT,
+  productBadges: [
+    { icon: "shieldCheck", label: "100% Halal" },
+    { icon: "truck", label: "Safe Shipping" },
+    { icon: "headset", label: "Reliable Support" },
+    { icon: "award", label: "Quality Products" },
+  ],
   sections: [
     {
       id: "sec-hero",

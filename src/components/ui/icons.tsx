@@ -102,6 +102,7 @@ const paths: Record<string, React.ReactNode> = {
   heart: <path d="M12 20.5s-8-4.6-8-10.6A4.4 4.4 0 0 1 12 7.3a4.4 4.4 0 0 1 8 2.6c0 6-8 10.6-8 10.6z" />,
   folder: <path d="M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6Z" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  minus: <path d="M5 12h14" />,
   phone: <path d="M5 3h3.5l1.8 4.5-2.3 1.7a12 12 0 0 0 5.8 5.8l1.7-2.3L19 14.5V18a3 3 0 0 1-3 3C9.4 21 3 14.6 3 8V5a2 2 0 0 1 2-2Z" />,
   mail: (
     <>
@@ -170,6 +171,12 @@ const paths: Record<string, React.ReactNode> = {
   headset: <path d="M4 14v-2a8 8 0 0 1 16 0v2M4 14h3v6H5a1 1 0 0 1-1-1v-5ZM20 14h-3v6h2a1 1 0 0 0 1-1v-5ZM17 20a4 4 0 0 1-4 2" />,
   receipt: <path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3ZM9 8h6M9 12h6M9 16h3" />,
   repeat: <path d="M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4" />,
+  award: (
+    <>
+      <circle cx="12" cy="9" r="6" />
+      <path d="m8.6 13.9-1.6 8.1 5-3 5 3-1.6-8.1M12 6.5l.8 1.6 1.7.2-1.2 1.2.3 1.7-1.6-.8-1.6.8.3-1.7-1.2-1.2 1.7-.2Z" />
+    </>
+  ),
   shieldCheck: <path d="M12 3 4 6v6c0 4.5 3.4 8.2 8 9 4.6-.8 8-4.5 8-9V6l-8-3ZM8.5 12l2.5 2.5 4.5-5" />,
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   // Food category icons (storefront category navigation).
@@ -221,6 +228,8 @@ const paths: Record<string, React.ReactNode> = {
 };
 
 export type IconName =
+  | "award"
+  | "minus"
   | "file"
   | "dashboard"
   | "box"

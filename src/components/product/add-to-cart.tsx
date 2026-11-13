@@ -5,7 +5,8 @@ import { useState, useTransition } from "react";
 import { addToCartAction } from "@/app/(store)/actions";
 import { StockBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Field, Input, Select } from "@/components/ui/field";
+import { Field, Select } from "@/components/ui/field";
+import { Icon } from "@/components/ui/icons";
 import { formatMoney } from "@/lib/format";
 import type { Money, StockStatus } from "@/lib/types";
 
@@ -20,6 +21,8 @@ export interface AddToCartOption {
   max?: number;
 }
 
+const stepButton = "grid size-10 shrink-0 place-items-center text-muted hover:text-brand disabled:opacity-35 disabled:hover:text-muted";
+
 /** Option + quantity picker for approved customers. The cart re-prices and re-checks everything on the server. */
 export function AddToCart({ productId, unitLabel, step, options }: { productId: string; unitLabel: string; step: number; options: AddToCartOption[] }) {
   const [index, setIndex] = useState(() => Math.max(0, options.findIndex((o) => o.available)));
@@ -27,6 +30,15 @@ export function AddToCart({ productId, unitLabel, step, options }: { productId: 
   const [quantity, setQuantity] = useState(String(option.min));
   const [result, setResult] = useState<{ ok: boolean; message: string }>();
   const [pending, startTransition] = useTransition();
+  const by = Math.max(1, step);
+  // − / + move by the multiple and stay within the option's limits; a typed number is checked by the server.
+  const change = (delta: number) => {
+    const current = Number(quantity);
+    const base = Number.isFinite(current) && current >= option.min ? current : option.min;
+    const next = Math.max(option.min, base + delta);
+    setQuantity(String(option.max !== undefined ? Math.min(option.max, next) : next));
+    setResult(undefined);
+  };
 
   return (
     <form
@@ -71,7 +83,27 @@ export function AddToCart({ productId, unitLabel, step, options }: { productId: 
           label={`Quantity (${unitLabel})`}
           hint={[`min ${option.min}`, option.max !== undefined && `max ${option.max}`, step > 1 && `multiples of ${step}`].filter(Boolean).join(" · ")}
         >
-          <Input id="atc-qty" type="number" inputMode="numeric" min={option.min} max={option.max} step={step} value={quantity} onChange={(e) => setQuantity(e.target.value)} className="w-24" />
+          <div className="inline-flex h-10 items-center rounded-ui border border-line bg-surface focus-within:border-brand">
+            <button type="button" aria-label="Decrease quantity" className={stepButton} disabled={!(Number(quantity) - by >= option.min)} onClick={() => change(-by)}>
+              <Icon name="minus" className="size-4" />
+            </button>
+            <input
+              id="atc-qty"
+              type="number"
+              inputMode="numeric"
+              min={option.min}
+              max={option.max}
+              step={step}
+              value={quantity}
+              onFocus={(e) => e.target.select()}
+              onChange={(e) => setQuantity(e.target.value)}
+              aria-describedby="atc-qty-hint"
+              className="h-full w-12 bg-transparent text-center text-base tabular-nums [appearance:textfield] focus:outline-none sm:text-sm [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+            <button type="button" aria-label="Increase quantity" className={stepButton} disabled={option.max !== undefined && Number(quantity) + by > option.max} onClick={() => change(by)}>
+              <Icon name="plus" className="size-4" />
+            </button>
+          </div>
         </Field>
         <Button type="submit" disabled={pending || !option.available} className="mb-[1.375rem] px-6">
           {pending ? "Adding…" : "Add to cart"}

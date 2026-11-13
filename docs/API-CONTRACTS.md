@@ -5423,6 +5423,15 @@ One homepage section. `type` decides its fields; order and visibility are shared
 
 Type: { id, enabled, type, slides, highlights } or { id, enabled, type, items } or { id, enabled, type, eyebrow, title, slugs, max } or { id, enabled, type, eyebrow, title, max } or { id, enabled, type, title, text } or { id, enabled, type, eyebrow, title, text, cta, image, cards } or { id, enabled, type, title, max } or { id, enabled, type, eyebrow, title, text, cta, image } or { id, enabled, type, eyebrow, title, text, image } or { id, enabled, type, eyebrow, title, items } or { id, enabled, type, eyebrow, title, max } or { id, enabled, type, title, text, cta }
 
+### IconLabel
+
+A small icon and label, such as "Safe shipping".
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `icon` | string | yes |  |
+| `label` | string | yes |  |
+
 ### IconText
 
 | Field | Type | Required | Notes |
@@ -7206,6 +7215,7 @@ DEMO calculation with sample rates; the backend must repeat it at cart, checkout
 | `topBar` | string | yes |  |
 | `sections` | [HomeSection](#homesection)[] | yes |  |
 | `about` | [AboutContent](#aboutcontent) | yes |  |
+| `productBadges` | [IconLabel](#iconlabel)[] | no | Badges under Add to cart on every product page (at most 6). Empty or missing hides the row. |
 | `updatedAt` | string | yes |  |
 
 ### SiteContentInput
@@ -7215,6 +7225,7 @@ DEMO calculation with sample rates; the backend must repeat it at cart, checkout
 | `topBar` | string | yes |  |
 | `sections` | [HomeSection](#homesection)[] | yes |  |
 | `about` | [AboutContent](#aboutcontent) | yes |  |
+| `productBadges` | [IconLabel](#iconlabel)[] | no | Badges under Add to cart on every product page (at most 6). Empty or missing hides the row. |
 
 ### SiteImage
 

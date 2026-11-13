@@ -191,14 +191,22 @@ export interface AboutContent {
   ctaText: string;
 }
 
+/** A small icon and label, such as "Safe shipping". */
+export interface IconLabel {
+  icon: string;
+  label: string;
+}
+
 export interface SiteContent {
   topBar: string;
   sections: HomeSection[];
   about: AboutContent;
+  /** Badges under Add to cart on every product page (at most 6). Empty or missing hides the row. */
+  productBadges?: IconLabel[];
   updatedAt: ISODateString;
 }
 
-export type SiteContentInput = Pick<SiteContent, "topBar" | "sections" | "about">;
+export type SiteContentInput = Pick<SiteContent, "topBar" | "sections" | "about" | "productBadges">;
 
 // --- Revisions, autosave and reusable blocks (docs/CMS-AND-CONTENT-MANAGEMENT.md) ---------------
 

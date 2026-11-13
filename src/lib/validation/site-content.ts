@@ -3,6 +3,9 @@ import type { CtaLink, HomeSection, SiteContentInput } from "../types/content.ts
 
 type Errors = Record<string, string>;
 
+/** Most badges a product page shows under Add to cart. */
+export const PRODUCT_BADGE_LIMIT = 6;
+
 const SAFE_LINK = /^(?:https?:\/\/\S+|\/(?!\/)\S*|#\S*)$/;
 
 function cta(errors: Errors, key: string, link: CtaLink) {
@@ -60,5 +63,11 @@ export function validateSiteContent(input: SiteContentInput): Errors {
     section(errors, s);
   }
   if (!input.about.title.trim()) errors["about.title"] = "Enter a heading.";
+  const badges = input.productBadges ?? [];
+  if (badges.length > PRODUCT_BADGE_LIMIT) errors.productBadges = `Use at most ${PRODUCT_BADGE_LIMIT} badges.`;
+  badges.forEach((b, i) => {
+    if (!b.label.trim()) errors[`productBadges.${i}.label`] = "Enter the text, or remove this badge.";
+    else if (b.label.length > 40) errors[`productBadges.${i}.label`] = "Keep it under 40 characters.";
+  });
   return errors;
 }
