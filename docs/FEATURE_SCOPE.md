@@ -45,7 +45,7 @@ Product origin (e.g. Japan) is a product attribute, separate from the store loca
 | Enabled variation without a price | WC | Warning in the editor and list; publishing blocked | Yes |
 | Visibility, status (draft/published/archived), featured | WC | Interactive demo; public list respects status and visibility | Yes |
 | Upsells and cross-sells | WC | Interactive demo (server-side product search picker) | Yes |
-| Purchase note, display order, reviews toggle | WC | Interactive demo (stored; reviews feature itself not built) | Yes |
+| Purchase note, display order, reviews toggle | WC | Interactive demo (stored; reviews feature itself not built — the product page Reviews tab only shows "no reviews yet") | Yes |
 | Legacy WooCommerce IDs, "initial number in stock", "unit of measurement" | WC (migration) | Typed optional fields; the last two edited in Inventory (as on the old store); no logic | Yes (migration) |
 | Rich-text description, scheduled publishing, private/password visibility, SEO fields, virtual/downloadable | WC / plugins | — (deferred) | Yes |
 | Per-product min / max / increment | Plugin? | Interactive demo: product's own minimum, maximum and multiple in packages (Inventory → Order quantity); variation and product rules override them, they beat category and store-wide rules (BUSINESS-RULES §3); shown and enforced on the product page, cart, checkout and admin orders | Yes |

@@ -74,6 +74,7 @@ Priority: **P0** is needed before any real customer uses it, **P1** soon after l
 | P1 | Product CSV import | Built: map columns, check every row, import, per-row results ([PRODUCT-CSV.md](PRODUCT-CSV.md)) | `POST /admin/products/import` with the same rules; a background job for large files |
 | P1 | Bulk product changes | Built: preview, then apply, at most 200 products | `POST /admin/products/bulk` with the same per-row rules, in one transaction per product |
 | P1 | Publishing checks | Editor, bulk publish and import share `validateProduct` / `publishProblems` | Run the same checks on every write |
+| P3 | Product reviews | The product page has a Reviews tab when `reviewsEnabled` is on; it always says there are no reviews yet. No review data, form or moderation exists | Decide if reviews are wanted. If so: a review table (product, customer, rating, text, status, dates), `GET /products/{id}/reviews` (approved only), a submit endpoint for approved customers, admin moderation, and the count for the tab label |
 
 ## Not started on either side
 

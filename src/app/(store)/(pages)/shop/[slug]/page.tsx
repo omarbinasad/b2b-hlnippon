@@ -8,6 +8,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { countryName, formatMoney, formatWeight } from "@/lib/format";
 import { Notice } from "@/components/ui/feedback";
 import { RichText } from "@/components/ui/rich-text";
+import { Tabs } from "@/components/ui/tabs";
 import { getShoppingCustomerId, getViewer } from "@/lib/auth/session";
 import { STANDARD_PRICING_ID } from "@/lib/pricing/standard";
 import { repositories } from "@/lib/data";
@@ -30,6 +31,22 @@ export default async function ProductPage({ params }: PageProps<"/shop/[slug]">)
   // Staff see the standard wholesale price for each option, without a cart.
   const staffPrices = viewer?.kind === "admin" ? await repositories.orders.orderableProduct(product.id, STANDARD_PRICING_ID) : null;
   const orderable = customerId ? await repositories.orders.orderableProduct(product.id, customerId) : null;
+  const brands = product.brandIds.length ? (await repositories.catalogSettings.brands()).filter((b) => product.brandIds.includes(b.id)) : [];
+  const activeOptions = product.variations.filter((v) => v.status === "active");
+  const min = limits?.min ?? 1;
+  const step = limits?.step ?? rule.step;
+  // Only what a buyer needs at a glance; the full text is in the Description tab. Order limits show here only when they
+  // matter; the quantity field shows every limit to approved customers.
+  const facts: [string, string][] = [
+    ["Weight", `${formatWeight(product.weight)} per ${product.unitLabel}`],
+    ...(product.originCountry ? [["Origin", countryName(product.originCountry)] as [string, string]] : []),
+    ...(brands.length ? [[brands.length > 1 ? "Brands" : "Brand", brands.map((b) => b.name).join(", ")] as [string, string]] : []),
+    ...(activeOptions.length ? [["Options", activeOptions.map((v) => Object.values(v.attributes).join(" ")).join(", ")] as [string, string]] : []),
+    ...(min > 1 ? [["Minimum order", `${min} ${product.unitLabel}`] as [string, string]] : []),
+    ...(step > 1 ? [["Order in multiples of", String(step)] as [string, string]] : []),
+    // A maximum set on this product (or sold one at a time) matters; a store-wide cap is left to the quantity field.
+    ...((rule.max !== undefined || product.soldIndividually) && limits?.max !== undefined ? [["Maximum per order", String(limits.max)] as [string, string]] : []),
+  ];
 
   return (
     <>
@@ -41,52 +58,35 @@ export default async function ProductPage({ params }: PageProps<"/shop/[slug]">)
       <div className="grid gap-6 md:grid-cols-2 md:gap-10">
         <ProductGallery images={product.images} />
 
-        <div className="space-y-4">
-          <div>
+        <div className="space-y-5">
+          <div className="space-y-2">
             <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{product.name}</h1>
-            <p className="mt-1 text-sm text-muted">SKU {product.sku}</p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+              <StockBadge status={product.stock.status} />
+              {product.sku && <span>SKU {product.sku}</span>}
+            </div>
           </div>
-          <StockBadge status={product.stock.status} />
-          <RichText value={product.description} className="text-muted" />
 
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-ui border border-line bg-surface p-4 text-sm">
-            <dt className="text-muted">Unit</dt>
-            <dd>{formatWeight(product.weight)} / {product.unitLabel}</dd>
-            {product.originCountry && (
-              <>
-                <dt className="text-muted">Origin</dt>
-                <dd>{countryName(product.originCountry)}</dd>
-              </>
-            )}
-            <dt className="text-muted">Minimum order</dt>
-            <dd>{limits?.min ?? 1} {product.unitLabel}</dd>
-            <dt className="text-muted">Order in multiples of</dt>
-            <dd>{limits?.step ?? rule.step}</dd>
-            {limits?.max !== undefined && (
-              <>
-                <dt className="text-muted">Maximum per order</dt>
-                <dd>{limits.max}</dd>
-              </>
-            )}
-            {product.variations.some((v) => v.status === "active") && (
-              <>
-                <dt className="text-muted">Options</dt>
-                <dd>{product.variations.filter((v) => v.status === "active").map((v) => Object.values(v.attributes).join(" ")).join(", ")}</dd>
-              </>
-            )}
+          <dl aria-label="Product details" className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-2 border-y border-line py-4 text-sm">
+            {facts.map(([label, value]) => (
+              <div key={label} className="contents">
+                <dt className="text-muted">{label}</dt>
+                <dd className="font-medium">{value}</dd>
+              </div>
+            ))}
           </dl>
 
           {product.isVariableWeight && (
-            <Notice title="Priced by weight">
-              The final price is adjusted to the actual packed weight after your order is prepared.
-            </Notice>
+            <p className="text-sm text-muted">
+              <span className="font-medium text-foreground">Priced by weight.</span> The final price is adjusted to the actual packed weight after your order is prepared.
+            </p>
           )}
 
           {orderable ? (
             <AddToCart
               productId={product.id}
               unitLabel={product.unitLabel}
-              step={limits?.step ?? rule.step}
+              step={step}
               options={orderable.options.map((o) => ({
                 variationId: o.variationId,
                 label: o.label,
@@ -132,8 +132,21 @@ export default async function ProductPage({ params }: PageProps<"/shop/[slug]">)
         </div>
       </div>
 
-      <div className="mt-10">
-      </div>
+      <section aria-label="More about this product" className="mt-10 sm:mt-14">
+        <Tabs
+          label="Product information"
+          tabs={[
+            {
+              id: "description",
+              label: "Description",
+              content: product.description ? <RichText value={product.description} className="max-w-3xl pt-5 text-muted" /> : <p className="pt-5 text-sm text-muted">No description yet.</p>,
+            },
+            ...(product.reviewsEnabled
+              ? [{ id: "reviews", label: "Reviews (0)", content: <p className="pt-5 text-sm text-muted">There are no reviews for this product yet.</p> }]
+              : []),
+          ]}
+        />
+      </section>
     </>
   );
 }

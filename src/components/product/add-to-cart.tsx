@@ -30,7 +30,7 @@ export function AddToCart({ productId, unitLabel, step, options }: { productId: 
 
   return (
     <form
-      className="space-y-3 rounded-ui border border-line bg-surface p-4"
+      className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
         startTransition(async () => {
@@ -39,10 +39,10 @@ export function AddToCart({ productId, unitLabel, step, options }: { productId: 
         });
       }}
     >
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-2xl font-semibold tabular-nums">{formatMoney(option.price)}</p>
+      <p className="flex flex-wrap items-baseline gap-x-2">
+        <span className="text-2xl font-semibold tabular-nums">{formatMoney(option.price)}</span>
         <span className="text-sm text-muted">per {unitLabel} · your price</span>
-      </div>
+      </p>
       {options.length > 1 && (
         <Field id="atc-option" label="Option">
           <Select
@@ -63,16 +63,17 @@ export function AddToCart({ productId, unitLabel, step, options }: { productId: 
           </Select>
         </Field>
       )}
-      <StockBadge status={option.stockStatus} />
-      <div className="flex items-end gap-3">
+      {/* The page shows the product's stock; with options, each one's own stock shows here. */}
+      {options.length > 1 && <StockBadge status={option.stockStatus} />}
+      <div className="flex items-end gap-2">
         <Field
           id="atc-qty"
           label={`Quantity (${unitLabel})`}
           hint={[`min ${option.min}`, option.max !== undefined && `max ${option.max}`, step > 1 && `multiples of ${step}`].filter(Boolean).join(" · ")}
         >
-          <Input id="atc-qty" type="number" inputMode="numeric" min={option.min} max={option.max} step={step} value={quantity} onChange={(e) => setQuantity(e.target.value)} className="w-28" />
+          <Input id="atc-qty" type="number" inputMode="numeric" min={option.min} max={option.max} step={step} value={quantity} onChange={(e) => setQuantity(e.target.value)} className="w-24" />
         </Field>
-        <Button type="submit" disabled={pending || !option.available} className="mb-[1.375rem] flex-1">
+        <Button type="submit" disabled={pending || !option.available} className="mb-[1.375rem] px-6">
           {pending ? "Adding…" : "Add to cart"}
         </Button>
       </div>
