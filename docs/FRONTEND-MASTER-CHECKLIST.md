@@ -32,7 +32,7 @@ Single source of truth for the "Complete B2B ecommerce frontend" brief. Update i
 
 ## Final verification
 
-Run on 2026-11-12 (batch 11, frontend freeze). Browser tests ran in headless Chrome against a production build on a separate test server (`next start -p 3100`), one suite at a time, each on a fresh server.
+Run on 2026-11-12 (batch 11, frontend freeze) and re-run in full on 2026-11-13 after the phone hero and floating bottom-menu changes. Browser tests ran in headless Chrome against a production build on a separate test server (`next start -p 3100`), one suite at a time, each on a fresh server.
 
 | Check | Result |
 | --- | --- |
@@ -40,12 +40,11 @@ Run on 2026-11-12 (batch 11, frontend freeze). Browser tests ran in headless Chr
 | Unit tests | 409 passed, 0 failed (32 files; new: `product-quantity`, `money-summary`, `product-bulk`, `product-csv`, `cms-revisions-blocks`, postcode inputs) |
 | Production build | Compiled |
 | API docs | `npm run docs:api`: 256 repository endpoints, 17 others, 310 types, no warnings. `npm run docs:routes`: 120 pages, 6 handlers |
-| Browser suites, final build | 17 suites, 829 checks, all passing: roles 160, cms 85, verify23 52, b4 37, b5 50, b6 36, b7 46, b8 47, b9 56, qa 67, qa2 15, qa3 45, **f1** 36 (quantity limits, publishing, bulk, CSV), **f2** 23 (quotation payment, money summary), **f3** 52 (blocks, revisions, autosave), **f4** 19 (variable product from scratch, tax classes and exempt, postcode typing), sweep 3 |
-| Browser suites, earlier build the same day | 10 suites, 336 checks, all passing: hero 61, ui2 43, cardqty 20, adminstore 23, steps 29, progress 33, cursor 12, bottom 39, brands 38, brand 38. Not re-run after the last fixes (postcode inputs, quantity precedence, draft and variable-stock rules, dialog wording), which these suites don't exercise |
+| Browser suites, final build (2026-11-13) | 28 suites, 1,235 checks, all passing: roles 160, hero 61, ui2 43, cardqty 20, adminstore 23, steps 29, progress 33, cursor 12, bottom 45, qa 67, qa2 15, qa3 45, brands 38, brand 38, cms 85, verify23 52, b4 37, b5 50, b6 36, b7 46, b8 47, b9 56, **f1** 36 (quantity limits, publishing, bulk, CSV), **f2** 23 (quotation payment, money summary), **f3** 52 (blocks, revisions, autosave), **f4** 19 (variable product from scratch, tax classes and exempt, postcode typing), **f5** 64 (phone hero: size, centred card, links on one row, phone photo per theme and only that photo downloaded), sweep 3. f5, hero, ui2 and bottom were run again after the last change (centring the phone hero card) |
 | Responsive sweep | 115 of 120 routes × 375, 390, 430, 768, 1024, 1366px (690 page loads): no server errors, no sideways page scroll |
 | New screens at 768 and 430px | Product editor, product list, import, product page, checkout, order pages, quotation, blocks list/new/edit, revisions, page editor, public page and blog post: no sideways scroll (f1–f4) |
 | Dark mode | Revisions screen, blocks (editor preview and public post) checked by screenshot |
-| `npm audit` | Not re-run this batch (last: 0 vulnerabilities on 2026-11-05) |
+| `npm audit` | 2026-11-13: 7 moderate, all in lint tooling only (`minimatch` under `typescript-eslint`, not shipped to the site); a non-breaking `npm audit fix` is available and not yet applied |
 
 **Fixed while testing this batch:** the product page ignored the product's own order limits; a store-wide quantity rule overrode a product's maximum; a new draft failed on empty weight, stock or selling unit; a variable product whose options track their own stock still needed a product-level quantity; five postcode fields were capped at 4 digits although Japanese postcodes have 7 (customer address form, shipping zone, shipping preview, tax rate, tax preview; tests had set values without typing); a page made only of a reusable block couldn't be published; the "Version restored" notice stayed after saving; a stale "coming later" hint on the product tax class.
 

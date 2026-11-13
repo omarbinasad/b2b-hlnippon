@@ -51,8 +51,8 @@ export function ArrowLink({ href, children }: { href: string; children: ReactNod
  * The heading is Poppins, as in the design, unless Company & Branding chooses a heading font. From 1280px the slide keeps the photo's proportions and everything on
  * the card is sized against the slide's width (cqw), so it lines up with the photo at any width. Below that the photo is
  * cropped to its right-hand side and the card sits over the left. On phones the slide is a little wider than tall and
- * shows the phone photo when there is one; the card sits across the bottom, compact, without the description, and its
- * two links stay on one row.
+ * shows the phone photo when there is one; the card sits across the bottom, compact and centred, without the
+ * description, and its two links stay on one row.
  */
 function PhotoHeroSlide({ slide, image, first, pager }: { slide: HeroSlideContent; image: NonNullable<HeroSlideContent["image"]>; first: boolean; /** Room is left at the bottom for the pagination notch. */ pager: boolean }) {
   const Heading = first ? "h1" : "h2";
@@ -61,7 +61,7 @@ function PhotoHeroSlide({ slide, image, first, pager }: { slide: HeroSlideConten
       <HeroPhoto image={image} imageDark={slide.imageDark} imageMobile={slide.imageMobile} imageMobileDark={slide.imageMobileDark} first={first} />
       <div
         className={[
-          "absolute inset-x-2.5 flex flex-col justify-center border border-hero-glass-line bg-hero-glass p-3.5 text-hero-glass-ink backdrop-blur-md backdrop-saturate-150 sm:inset-x-auto sm:top-6 sm:left-6 sm:w-[min(36rem,64%)] sm:p-8",
+          "absolute inset-x-2.5 flex flex-col justify-center border text-center sm:text-left border-hero-glass-line bg-hero-glass p-3.5 text-hero-glass-ink backdrop-blur-md backdrop-saturate-150 sm:inset-x-auto sm:top-6 sm:left-6 sm:w-[min(36rem,64%)] sm:p-8",
           pager ? "bottom-11 sm:bottom-12" : "bottom-3 sm:bottom-6",
           // A light edge along the top and a soft shadow make it read as glass.
           "shadow-[inset_0_1px_0_rgb(255_255_255/0.7),0_10px_40px_rgb(0_0_0/0.16)]",
@@ -71,13 +71,15 @@ function PhotoHeroSlide({ slide, image, first, pager }: { slide: HeroSlideConten
       >
         {slide.eyebrow && (
           <div className="flex items-center gap-3 xl:gap-[0.9cqw]">
+            {/* On phones the copy is centred, so the line runs on both sides of the badge. */}
+            <span aria-hidden="true" className="h-0.5 min-w-6 flex-1 rounded-full bg-hero-badge-to/80 sm:hidden" />
             <p className="shrink-0 rounded-full bg-gradient-to-b from-hero-badge-from to-hero-badge-to px-3 py-0.5 text-[0.6875rem] font-bold tracking-wide text-white uppercase shadow-sm sm:px-3.5 sm:py-1 sm:text-sm xl:px-[1.1cqw] xl:py-[0.38cqw] xl:text-[1.35cqw] xl:leading-none">{slide.eyebrow}</p>
             <span aria-hidden="true" className="h-0.5 min-w-6 flex-1 rounded-full bg-hero-badge-to/80" />
           </div>
         )}
         <Heading className="mt-2 font-[family-name:var(--font-heading,var(--font-poppins))] text-2xl leading-[1.05] sm:mt-3 sm:leading-[1.02] font-bold tracking-[-0.02em] sm:text-[2.6rem] xl:mt-[1.5cqw] xl:text-[3.3cqw] xl:leading-[0.98]">{slide.title}</Heading>
         <p className="mt-3 hidden leading-snug text-hero-glass-muted sm:block sm:text-lg xl:mt-[1.1cqw] xl:text-[1.32cqw] xl:leading-[1.32]">{slide.description}</p>
-        <div className="mt-3 flex flex-nowrap items-center gap-3 sm:mt-5 sm:flex-wrap sm:gap-x-8 sm:gap-y-3 xl:mt-[1.8cqw] xl:flex-col xl:items-start xl:gap-[1cqw]">
+        <div className="mt-3 flex flex-nowrap items-center justify-center gap-3 sm:mt-5 sm:justify-start sm:flex-wrap sm:gap-x-8 sm:gap-y-3 xl:mt-[1.8cqw] xl:flex-col xl:items-start xl:gap-[1cqw]">
           <Link
             href={slide.cta.href as "/shop"}
             className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-b from-hero-cta-from to-hero-cta-to px-3.5 text-[0.8125rem] font-semibold whitespace-nowrap text-white sm:h-12 sm:gap-2.5 sm:px-6 shadow-lg shadow-black/20 transition hover:brightness-110 sm:text-lg xl:h-[3.3cqw] xl:gap-[0.9cqw] xl:rounded-[0.75cqw] xl:px-[1.9cqw] xl:text-[1.5cqw]"
